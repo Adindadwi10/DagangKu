@@ -1,172 +1,90 @@
-from flask import Flask, jsonify, request
+from flask import Flask, request, render_template_string
 
 app = Flask(__name__)
 
-# Database sementara untuk menyimpan akun pendaftaran
-database_pengguna = []
+# Menyimpan data perusahaan sementara (bisa dikembangkan dengan database nantinya)
+profil_perusahaan = {
+    "nama": "DagangKu",
+    "alamat": "Semarang, Jawa Tengah",
+    "telepon": "081234567890",
+    "periode": "2026"
+}
 
-# 1. Halaman utama (langsung menampilkan form tanpa file HTML terpisah)
 @app.route('/')
-def beranda():
-    return """
+def dashboard():
+    return render_template_string('''
     <!DOCTYPE html>
     <html lang="id">
     <head>
         <meta charset="UTF-8">
-        <title>DagangKu - Akuntansi</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Simulasi Akuntansi - DagangKu</title>
+        <style>
+            body { font-family: Arial, sans-serif; background-color: #f4f6f9; margin: 0; display: flex; }
+            .sidebar { width: 250px; background-color: #1e293b; color: white; height: 100vh; position: fixed; padding-top: 20px; }
+            .sidebar h2 { font-size: 18px; padding: 0 20px; margin-bottom: 20px; color: #38bdf8; }
+            .sidebar a { display: block; color: #cbd5e1; padding: 12px 20px; text-decoration: none; font-size: 14px; }
+            .sidebar a:hover, .sidebar a.active { background-color: #db2777; color: white; }
+            .content { margin-left: 250px; padding: 30px; width: calc(100% - 250px); }
+            .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+            .form-group { margin-bottom: 15px; }
+            .form-group label { display: block; margin-bottom: 5px; font-weight: bold; color: #334155; }
+            .form-group input { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; }
+            .btn { background-color: #db2777; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; }
+            .btn:hover { background-color: #be185d; }
+        </style>
     </head>
-    <body style="font-family: Arial, sans-serif; background-color: #f4f6f9; padding: 40px; display: flex; justify-content: center;">
-        <div style="background: white; width: 100%; max-width: 400px; padding: 25px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
-            
-            <!-- FORM MASUK -->
-            <div id="sectionMasuk">
-                <h2>Masuk</h2>
-                <form id="formMasuk">
-                    <div style="margin-bottom: 15px;">
-                        <label>Email *</label><br>
-                        <input type="email" id="masukEmail" required style="width: 100%; padding: 8px; margin-top: 5px; box-sizing: border-box;">
-                    </div>
-                    <div style="margin-bottom: 15px;">
-                        <label>Password *</label><br>
-                        <input type="password" id="masukPassword" required style="width: 100%; padding: 8px; margin-top: 5px; box-sizing: border-box;">
-                    </div>
-                    <button type="submit" style="width: 100%; padding: 10px; cursor: pointer;">Masuk</button>
-                </form>
-                <p style="margin-top: 15px;">Belum punya akun? <span id="linkDaftar" style="color: blue; cursor: pointer; text-decoration: underline;">Daftar di sini</span></p>
-            </div>
-
-            <!-- FORM DAFTAR -->
-            <div id="sectionDaftar" style="display: none;">
-                <h2>Daftar Akun Baru</h2>
-                <form id="formDaftar">
-                    <div style="margin-bottom: 12px;">
-                        <label>Nama lengkap *</label><br>
-                        <input type="text" id="namaLengkap" required style="width: 100%; padding: 8px; margin-top: 5px; box-sizing: border-box;">
-                    </div>
-                    <div style="margin-bottom: 12px;">
-                        <label>Email *</label><br>
-                        <input type="email" id="daftarEmail" required style="width: 100%; padding: 8px; margin-top: 5px; box-sizing: border-box;">
-                    </div>
-                    <div style="margin-bottom: 12px;">
-                        <label>Password *</label><br>
-                        <input type="password" id="daftarPassword" required style="width: 100%; padding: 8px; margin-top: 5px; box-sizing: border-box;">
-                    </div>
-                    <div style="margin-bottom: 12px;">
-                        <label>Nama perusahaan *</label><br>
-                        <input type="text" id="namaPerusahaan" required value="PT Dagang" style="width: 100%; padding: 8px; margin-top: 5px; box-sizing: border-box;">
-                    </div>
-                    <div style="margin-bottom: 12px;">
-                        <label>Tanggal saldo awal *</label><br>
-                        <input type="date" id="tanggalSaldo" required value="2026-01-01" style="width: 100%; padding: 8px; margin-top: 5px; box-sizing: border-box;">
-                    </div>
-                    <button type="submit" style="width: 100%; padding: 10px; cursor: pointer;">Daftar & buat perusahaan</button>
-                </form>
-                <p style="margin-top: 15px;">Sudah punya akun? <span id="linkMasuk" style="color: blue; cursor: pointer; text-decoration: underline;">Masuk</span></p>
-            </div>
-
-            <p id="statusPesan" style="font-weight: bold; margin-top: 15px; text-align: center;"></p>
+    <body>
+        <div class="sidebar">
+            <h2>Simulasi Akuntansi</h2>
+            <a href="/">Dashboard</a>
+            <a href="/data-perusahaan" class="active">Data Perusahaan</a>
+            <a href="#">Daftar Akun</a>
+            <a href="#">Saldo Awal</a>
+            <a href="#">Pelanggan</a>
+            <a href="#">Pemasok</a>
+            <a href="#">Barang</a>
         </div>
-
-        <script>
-            const sMasuk = document.getElementById('sectionMasuk');
-            const sDaftar = document.getElementById('sectionDaftar');
-            const status = document.getElementById('statusPesan');
-
-            document.getElementById('linkDaftar').onclick = () => {
-                sMasuk.style.display = 'none';
-                sDaftar.style.display = 'block';
-                status.innerText = '';
-            };
-
-            document.getElementById('linkMasuk').onclick = () => {
-                sDaftar.style.display = 'none';
-                sMasuk.style.display = 'block';
-                status.innerText = '';
-            };
-
-            // Kirim data pendaftaran
-            document.getElementById('formDaftar').onsubmit = (e) => {
-                e.preventDefault();
-                const dataBaru = {
-                    namaLengkap: document.getElementById('namaLengkap').value,
-                    email: document.getElementById('daftarEmail').value,
-                    password: document.getElementById('daftarPassword').value,
-                    namaPerusahaan: document.getElementById('namaPerusahaan').value,
-                    tanggalSaldo: document.getElementById('tanggalSaldo').value
-                };
-
-                fetch('/api/daftar', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(dataBaru)
-                })
-                .then(res => res.json())
-                .then(resData => {
-                    status.innerText = resData.pesan;
-                    status.style.color = "green";
-                    if(resData.sukses) {
-                        setTimeout(() => {
-                            sDaftar.style.display = 'none';
-                            sMasuk.style.display = 'block';
-                            status.innerText = '';
-                        }, 2000);
-                    }
-                });
-            };
-
-            // Kirim data login
-            document.getElementById('formMasuk').onsubmit = (e) => {
-                e.preventDefault();
-                const dataLogin = {
-                    email: document.getElementById('masukEmail').value,
-                    password: document.getElementById('masukPassword').value
-                };
-
-                fetch('/api/masuk', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(dataLogin)
-                })
-                .then(res => res.json())
-                .then(resData => {
-                    status.innerText = resData.pesan;
-                    status.style.color = resData.sukses ? "green" : "red";
-                });
-            };
-        </script>
+        <div class="content">
+            <h1>Data Perusahaan</h1>
+            <div class="card">
+                <form method="POST" action="/update-perusahaan">
+                    <div class="form-group">
+                        <label>Nama Perusahaan:</label>
+                        <input type="text" name="nama" value="{{ profil.nama }}">
+                    </div>
+                    <div class="form-group">
+                        <label>Alamat:</label>
+                        <input type="text" name="alamat" value="{{ profil.alamat }}">
+                    </div>
+                    <div class="form-group">
+                        <label>Nomor Telepon:</label>
+                        <input type="text" name="telepon" value="{{ profil.telepon }}">
+                    </div>
+                    <div class="form-group">
+                        <label>Periode Akuntansi:</label>
+                        <input type="text" name="periode" value="{{ profil.periode }}">
+                    </div>
+                    <button type="submit" class="btn">Simpan Perubahan</button>
+                </form>
+            </div>
+        </div>
     </body>
     </html>
-    """
+    ''', profil=profil_perusahaan)
 
-# 2. Endpoint API Pendaftaran
-@app.route('/api/daftar', methods=['POST'])
-def daftar():
-    data = request.json
-    database_pengguna.append(data)
-    return jsonify({
-        "sukses": True,
-        "pesan": f"Berhasil mendaftarkan perusahaan {data.get('namaPerusahaan')}! Silakan Masuk."
-    })
+@app.route('/data-perusahaan')
+def data_perusahaan():
+    return dashboard()
 
-# 3. Endpoint API Masuk (Login)
-@app.route('/api/masuk', methods=['POST'])
-def masuk():
-    data = request.json
-    email = data.get('email')
-    password = data.get('password')
-    
-    user = next((u for u in database_pengguna if u['email'] == email and u['password'] == password), None)
-    
-    if user:
-        return jsonify({
-            "sukses": True,
-            "pesan": f"Berhasil masuk ke perusahaan: {user['namaPerusahaan']}!"
-        })
-    else:
-        return jsonify({
-            "sukses": False,
-            "pesan": "Email atau password salah, atau akun belum terdaftar."
-        })
+@app.route('/update-perusahaan', methods=['POST'])
+def update_perusahaan():
+    global profil_perusahaan
+    profil_perusahaan['nama'] = request.form.get('nama')
+    profil_perusahaan['alamat'] = request.form.get('alamat')
+    profil_perusahaan['telepon'] = request.form.get('telepon')
+    profil_perusahaan['periode'] = request.form.get('periode')
+    return dashboard()
 
 if __name__ == '__main__':
     app.run(debug=True)
