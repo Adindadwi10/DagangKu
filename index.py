@@ -3,8 +3,9 @@ from flask import Flask, request, render_template_string, redirect, url_for
 app = Flask(__name__)
 
 user_session = {"logged_in": False, "username": "", "page": "login"}
+# Diubah default namanya menjadi "PT Dagang"
 profil_perusahaan = {
-    "nama": "PT Dagang Simulasi",
+    "nama": "PT Dagang",
     "alamat": "",
     "telepon": "",
     "periode": "01/01/2026"
@@ -23,7 +24,8 @@ def index():
                 <p>Nama lengkap:<br><input type="text" name="nama_lengkap" required></p>
                 <p>Email:<br><input type="email" name="email" required></p>
                 <p>Password:<br><input type="password" name="password" required></p>
-                <p>Nama perusahaan:<br><input type="text" name="nama_perusahaan" value="PT Dagang Simulasi" required></p>
+                <!-- Default value di form daftar diubah ke PT Dagang -->
+                <p>Nama perusahaan:<br><input type="text" name="nama_perusahaan" value="PT Dagang" required></p>
                 <p>Tanggal saldo awal:<br><input type="text" name="tanggal" value="01/01/2026"></p>
                 <button type="submit">Daftar & buat perusahaan</button>
             </form>
@@ -72,6 +74,7 @@ def data_perusahaan():
     if not user_session["logged_in"]:
         return redirect(url_for('index'))
     
+    # Menggunakan placeholder agar teks contoh otomatis hilang saat diketik
     return render_template_string('''
     <h2>Data Perusahaan</h2>
     <hr>
@@ -81,9 +84,9 @@ def data_perusahaan():
     </ul>
     <hr>
     <form method="POST" action="/update-perusahaan">
-        <p>Nama Perusahaan:<br><input type="text" name="nama" value="{{ profil.nama }}"></p>
-        <p>Alamat:<br><input type="text" name="alamat" value="{{ profil.alamat }}"></p>
-        <p>Nomor Telepon:<br><input type="text" name="telepon" value="{{ profil.telepon }}"></p>
+        <p>Nama Perusahaan:<br><input type="text" name="nama" value="{{ profil.nama }}" placeholder="Contoh: PT Dagang Jaya"></p>
+        <p>Alamat:<br><input type="text" name="alamat" value="{{ profil.alamat }}" placeholder="Contoh: Jl. Pemuda No. 15, Semarang"></p>
+        <p>Nomor Telepon:<br><input type="text" name="telepon" value="{{ profil.telepon }}" placeholder="Contoh: 081234567890"></p>
         <p>Periode Akuntansi:<br><input type="text" name="periode" value="{{ profil.periode }}"></p>
         <button type="submit">Simpan Perubahan</button>
     </form>
