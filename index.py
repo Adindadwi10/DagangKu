@@ -3,7 +3,7 @@ from flask import Flask, request, render_template_string, redirect, url_for
 app = Flask(__name__)
 
 # Status login sederhana
-user_session = {"logged_in": False, "username": ""}
+user_session = {"logged_in": False, "username": "", "mode": "login"}
 
 # Menyimpan data perusahaan sementara
 profil_perusahaan = {
@@ -22,11 +22,14 @@ def index():
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Masuk - DagangKu</title>
+            <title>Masuk / Daftar - DagangKu</title>
             <style>
                 body { font-family: Arial, sans-serif; background-color: #f4f6f9; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-                .login-card { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 350px; }
-                .login-card h2 { text-align: center; color: #1e293b; margin-bottom: 20px; }
+                .auth-card { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 380px; }
+                .auth-card h2 { text-align: center; color: #1e293b; margin-bottom: 20px; }
+                .tabs { display: flex; margin-bottom: 20px; border-bottom: 2px solid #e2e8f0; }
+                .tab { flex: 1; text-align: center; padding: 10px; cursor: pointer; font-weight: bold; color: #64748b; text-decoration: none; }
+                .tab.active { color: #db2777; border-bottom: 2px solid #db2777; margin-bottom: -2px; }
                 .form-group { margin-bottom: 15px; }
                 .form-group label { display: block; margin-bottom: 5px; font-weight: bold; color: #334155; font-size: 14px; }
                 .form-group input { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; }
@@ -35,36 +38,59 @@ def index():
             </style>
         </head>
         <body>
-            <div class="login-card">
-                <h2>Masuk ke DagangKu</h2>
-                <form method="POST" action="/login">
+            <div class="auth-card">
+                <h2>DagangKu Akuntansi</h2>
+                <div class="tabs">
+                    <a href="/?mode=login" class="tab {{ 'active' if mode == 'login' else '' }}">Masuk</a>
+                    <a href="/?mode=register" class="tab {{ 'active' if mode == 'register' else '' }}">Daftar</a>
+                </div>
+                
+                <form method="POST" action="/auth-submit">
+                    <input type="hidden" name="mode" value="{{ mode }}">
+                    {% if mode == 'register' %}
                     <div class="form-group">
-                        <label>Nama Perusahaan / Akun:</label>
-                        <input type="text" name="username" placeholder="Contoh: PT DagangKu Jaya" required>
+                        <label>Nama Perusahaan / Toko:</label>
+                        <input type="text" name="nama_pt" placeholder="Contoh: PT DagangKu Jaya" required>
                     </div>
-                    <button type="submit" class="btn">Masuk</button>
+                    {% endif %}
+                    <div class="form-group">
+                        <label>Email / Username:</label>
+                        <input type="text" name="username" placeholder="Contoh: adinda@email.com" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Kata Sandi:</label>
+                        <input type="password" name="password" placeholder="Masukkan kata sandi" required>
+                    </div>
+                    <button type="submit" class="btn">{{ 'Masuk Sekarang' if mode == 'login' else 'Daftar Akun Baru' }}</button>
                 </form>
             </div>
         </body>
         </html>
-        ''')
+        ''', mode=request.args.get('mode', 'login'))
     else:
         return redirect(url_for('data_perusahaan'))
 
-@app.route('/login', methods=['POST'])
-def login():
+@app.route('/auth-submit', methods=['POST'])
+def auth_submit():
+    mode = request.form.get('mode')
     username = request.form.get('username')
-    if username:
-        user_session["logged_in"] = True
-        user_session["username"] = username
+    nama_pt = request.form.get('nama_pt', 'Perusahaan Dagang')
+    
+    user_session["logged_in"] = True
+    user_session["username"] = username
+    
+    if mode == 'register' and nama_pt:
+        profil_perusahaan["nama"] = nama_pt
+    else:
         profil_perusahaan["nama"] = username
+        
     return redirect(url_for('data_perusahaan'))
 
 @app.route('/logout')
 def logout():
     user_session["logged_in"] = False
     user_session["username"] = ""
-    return redirect(url_for('index'))
+    return redirect(url_for('/'))
 
 @app.route('/data-perusahaan')
 def data_perusahaan():
