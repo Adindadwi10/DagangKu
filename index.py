@@ -2,11 +2,11 @@ from flask import Flask, request, render_template_string
 
 app = Flask(__name__)
 
-# Menyimpan data perusahaan sementara (bisa dikembangkan dengan database nantinya)
+# Menyimpan data perusahaan sementara
 profil_perusahaan = {
-    "nama": "DagangKu",
-    "alamat": "Semarang, Jawa Tengah",
-    "telepon": "081234567890",
+    "nama": "",
+    "alamat": "",
+    "telepon": "",
     "periode": "2026"
 }
 
@@ -25,13 +25,14 @@ def dashboard():
             .sidebar h2 { font-size: 18px; padding: 0 20px; margin-bottom: 20px; color: #38bdf8; }
             .sidebar a { display: block; color: #cbd5e1; padding: 12px 20px; text-decoration: none; font-size: 14px; }
             .sidebar a:hover, .sidebar a.active { background-color: #db2777; color: white; }
-            .content { margin-left: 250px; padding: 30px; width: calc(100% - 250px); }
+            .content { margin-left: 250px; padding: 30px; width: calc(100% - 250px); box-sizing: border-box; }
             .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
             .form-group { margin-bottom: 15px; }
             .form-group label { display: block; margin-bottom: 5px; font-weight: bold; color: #334155; }
             .form-group input { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; }
             .btn { background-color: #db2777; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; }
             .btn:hover { background-color: #be185d; }
+            .success-msg { background-color: #d1fae5; color: #065f46; padding: 10px; border-radius: 4px; margin-bottom: 15px; }
         </style>
     </head>
     <body>
@@ -51,19 +52,19 @@ def dashboard():
                 <form method="POST" action="/update-perusahaan">
                     <div class="form-group">
                         <label>Nama Perusahaan:</label>
-                        <input type="text" name="nama" value="{{ profil.nama }}">
+                        <input type="text" name="nama" value="{{ profil.nama }}" placeholder="Contoh: PT DagangKu Jaya">
                     </div>
                     <div class="form-group">
                         <label>Alamat:</label>
-                        <input type="text" name="alamat" value="{{ profil.alamat }}">
+                        <input type="text" name="alamat" value="{{ profil.alamat }}" placeholder="Contoh: Jl. Sudirman No. 123, Semarang">
                     </div>
                     <div class="form-group">
                         <label>Nomor Telepon:</label>
-                        <input type="text" name="telepon" value="{{ profil.telepon }}">
+                        <input type="text" name="telepon" value="{{ profil.telepon }}" placeholder="Contoh: 081234567890">
                     </div>
                     <div class="form-group">
                         <label>Periode Akuntansi:</label>
-                        <input type="text" name="periode" value="{{ profil.periode }}">
+                        <input type="text" name="periode" value="{{ profil.periode }}" placeholder="Contoh: 2026">
                     </div>
                     <button type="submit" class="btn">Simpan Perubahan</button>
                 </form>
