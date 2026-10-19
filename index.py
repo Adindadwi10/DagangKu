@@ -39,9 +39,9 @@ DEFAULT_AKUN = [
     {"kode": "3-9999", "nama": "Historical Balancing", "level": "Akun biasa", "tipe": "Historical Balancing", "dk": "D/K", "saldo": "-", "kategori": "3 — Ekuitas", "sistem": True, "aktif": True},
 
     {"kode": "4-1100", "nama": "Penjualan", "level": "Akun biasa", "tipe": "Penjualan (Kredit)", "dk": "K", "saldo": "-", "kategori": "4 — Pendapatan", "sistem": True, "aktif": True},
-    {"kode": "4-1200", "nama": "Retur Penjualan", "level": "Akun biasa", "tipe": "Retur Penjualan (Debit)", "dk": "D", "saldo": "-", "kategori": "4 — Pendapatan", "sistem": False, "aktif": True},
-    {"kode": "4-1300", "nama": "Potongan Penjualan", "level": "Akun biasa", "tipe": "Potongan Penjualan (Debit)", "dk": "D", "saldo": "-", "kategori": "4 — Pendapatan", "sistem": False, "aktif": True},
-    {"kode": "4-1400", "nama": "Beban Angkut Penjualan", "level": "Akun biasa", "tipe": "Beban Angkut Penjualan (Debit)", "dk": "D", "saldo": "-", "kategori": "4 — Pendapatan", "sistem": False, "aktif": True},
+    {"kode": "4-1200", "nama": "Retur Penjualan", "level": "Akun biasa", "tipe": "Retur Penjualan (Debit)", "dk": "D", "saldo": "-", "kategori": "4 — Pendapatan", "sistem": True, "aktif": True},
+    {"kode": "4-1300", "nama": "Potongan Penjualan", "level": "Akun biasa", "tipe": "Potongan Penjualan (Debit)", "dk": "D", "saldo": "-", "kategori": "4 — Pendapatan", "sistem": True, "aktif": True},
+    {"kode": "4-1400", "nama": "Beban Angkut Penjualan", "level": "Akun biasa", "tipe": "Beban Angkut Penjualan (Debit)", "dk": "D", "saldo": "-", "kategori": "4 — Pendapatan", "sistem": True, "aktif": True},
 
     {"kode": "5-1100", "nama": "Harga Pokok Penjualan", "level": "Akun biasa", "tipe": "Harga Pokok Penjualan (Debit)", "dk": "D", "saldo": "-", "kategori": "5 — Harga Pokok Penjualan", "sistem": True, "aktif": True},
     {"kode": "5-1200", "nama": "Potongan Pembelian", "level": "Akun biasa", "tipe": "Potongan Pembelian (Kredit)", "dk": "K", "saldo": "-", "kategori": "5 — Harga Pokok Penjualan", "sistem": False, "aktif": False},
@@ -111,7 +111,7 @@ def sync_saldo_awal_penjualan(email):
 
     for p in list_pelanggan:
         try:
-            val = int(str(p.get('saldo_awal_piutang', 0)).replace('.', '') or 0)
+            val = int(p.get('saldo_awal_piutang', 0) or 0)
             if val > 0:
                 kode_plg = p.get('kode')
                 formatted_val = f"{val:,.0f}".replace(',', '.')
@@ -126,10 +126,10 @@ def sync_saldo_awal_penjualan(email):
                     'sisa': formatted_val,
                     'is_saldo_awal': True,
                     'details': [],
-                    'subtotal': val,
+                    'dpp': val,
                     'ppn': 0,
                     'beban_angkut': 0,
-                    'total_hpp': 0
+                    'hpp': 0
                 }
                 penjualan_list.append(tr_baru)
         except Exception:
@@ -137,21 +137,29 @@ def sync_saldo_awal_penjualan(email):
 
     database_user[email]['penjualan'] = penjualan_list
 
+def hitung_sisa_piutang_pelanggan(user_data, nama_pelanggan):
+    total = 0
+    for tr in user_data.get('penjualan', []):
+        if tr.get('pelanggan') == nama_pelanggan:
+            try:
+                sisa_str = str(tr.get('sisa', tr.get('total', '0'))).replace('.', '')
+                total += int(sisa_str)
+            except:
+                pass
+    return total
+
 def hitung_total_piutang_pelanggan(user_data):
     total = 0
     for p in user_data.get('pelanggan', []):
-        try:
-            val = int(str(p.get('saldo_awal_piutang', 0)).replace('.', '') or 0)
-            total += val
-        except Exception:
-            pass
+        nama = p.get('nama')
+        total += hitung_sisa_piutang_pelanggan(user_data, nama)
     return total
 
 def hitung_total_utang_pemasok(user_data):
     total = 0
     for s in user_data.get('pemasok', []):
         try:
-            val = int(str(s.get('saldo_awal_utang', 0)).replace('.', '') or 0)
+            val = int(s.get('saldo_awal_utang', 0) or 0)
             total += val
         except Exception:
             pass
@@ -161,8 +169,8 @@ def hitung_total_persediaan_barang(user_data):
     total = 0
     for b in user_data.get('barang', []):
         try:
-            qty = float(str(b.get('qty_awal', 0)).replace('.', '') or 0)
-            hp = float(str(b.get('harga_pokok', 0)).replace('.', '') or 0)
+            qty = float(b.get('qty_awal', 0) or 0)
+            hp = float(b.get('harga_pokok', 0) or 0)
             total += int(qty * hp)
         except Exception:
             pass
@@ -249,6 +257,7 @@ def render_dashboard_layout(active_menu, content_html, message=""):
             .badge-dk {{ background-color: #ecfdf5; color: #047857; padding: 2px 6px; border-radius: 4px; font-weight: 600; font-size: 11px; }}
             .badge-dk-k {{ background-color: #eff6ff; color: #1d4ed8; padding: 2px 6px; border-radius: 4px; font-weight: 600; font-size: 11px; }}
             .badge-belum-lunas {{ background-color: #fef3c7; color: #b45309; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; border: 1px solid #fde68a; display: inline-block; }}
+            .badge-lunas {{ background-color: #ecfdf5; color: #047857; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; border: 1px solid #a7f3d0; display: inline-block; }}
             .badge-saldo-awal {{ background-color: #f3f4f6; color: #374151; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; margin-left: 6px; }}
             
             .action-container {{ display: flex; align-items: center; justify-content: flex-end; gap: 4px; white-space: nowrap; }}
@@ -286,23 +295,23 @@ def render_dashboard_layout(active_menu, content_html, message=""):
                 <a href="/kartu/pemasok" class="menu-item {'active' if active_menu == 'pemasok' else ''}">Pemasok</a>
                 <a href="/kartu/barang" class="menu-item {'active' if active_menu == 'barang' else ''}">Barang</a>
                 
-                <div class="menu-category" style="margin-top: 15px;">Transaksi</div>
-                <a href="/transaksi/penjualan" class="menu-item {'active' if active_menu == 'penjualan' else ''}">Penjualan</a>
-                <a href="#" class="menu-item">Retur Penjualan</a>
-                <a href="#" class="menu-item">Pembelian</a>
-                <a href="#" class="menu-item">Retur Pembelian</a>
-                <a href="#" class="menu-item">Penerimaan Kas</a>
-                <a href="#" class="menu-item">Pengeluaran Kas</a>
-                <a href="#" class="menu-item">Jurnal Umum</a>
+                <div class="menu-category">TRANSAKSI</div>
+                <a href="/transaksi/penjualan" class="menu-item" {'active' if active_menu == 'penjualan' else ''}">Penjualan</a>
+                <a href="/transaksi/retur-penjualan" class="menu-item {'active' if active_menu == 'retur_penjualan' else ''}">Retur Penjualan</a>
+                <a href="/transaksi/pembelian" class="menu-item {'active' if active_menu == 'pembelian' else ''}">Pembelian</a>
+                <a href="/transaksi/retur-pembelian" class="menu-item {'active' if active_menu == 'retur_pembelian' else ''}">Retur Pembelian</a>
+                <a href="/transaksi/penerimaan-kas" class="menu-item {'active' if active_menu == 'penerimaan_kas' else ''}">Penerimaan Kas</a>
+                <a href="/transaksi/pengeluaran-kas" class="menu-item {'active' if active_menu == 'pengeluaran_kas' else ''}">Pengeluaran Kas</a>
+                <a href="/transaksi/jurnal-umum" class="menu-item {'active' if active_menu == 'jurnal_umum' else ''}">Jurnal Umum</a>
             </div>
         </div>
 
         <div class="main-container">
             <div class="topbar">
-                <div class="topbar-company">{user_data.get('perusahaan', 'PT MAKMUR')}</div>
+                <div class="topbar-company">{user_data.get('perusahaan', 'PT mydagang')}</div>
                 <div class="topbar-user-area">
                     <div class="user-info">
-                        <div class="user-name">{user_data.get('nama', 'Safitri')}</div>
+                        <div class="user-name">{user_data.get('nama', 'adinda')}</div>
                         <div class="user-email">{user_email}</div>
                     </div>
                     <a href="/logout" class="btn-keluar">Keluar</a>
@@ -470,15 +479,24 @@ def proses_login():
     return redirect(url_for('setup_perusahaan'))
 
 @app.route('/register', methods=['POST'])
-def proses_register():
-    nama = request.form.get('nama_lengkap')
-    email = request.form.get('email')
-    password = request.form.get('password')
-    perusahaan = request.form.get('nama_perusahaan')
-    tanggal_saldo = request.form.get('tanggal_saldo')
-    
-    if email in database_user:
-        return redirect(url_for('register', msg="Email sudah terdaftar! Silakan masuk."))
+def register():
+    error_message = ""
+    if request.method == 'POST':
+        email = request.form.get('email', '').strip()
+        password = request.form.get('password', '').strip()
+        nama_perusahaan = request.form.get('nama_perusahaan', 'PT Mydagang').strip()
+        if not nama_perusahaan:
+            nama_perusahaan = 'PT Mydagang'
+        
+        # Validasi backend tambahan
+        if '@' not in email:
+            error_message = "Format email tidak valid (harus mengandung '@')."
+        elif len(password) < 6:
+            error_message = "Password harus memiliki minimal 6 karakter."
+        elif email in database_user:
+            error_message = "Email sudah terdaftar. Silakan gunakan email lain."
+
+    return redirect(url_for('register', msg="Email sudah terdaftar! Silakan masuk."))
     
     database_user[email] = {
         'nama': nama,
@@ -492,7 +510,9 @@ def proses_register():
         'pelanggan': [],
         'pemasok': [],
         'barang': [],
-        'penjualan': []
+        'penjualan': [],
+        'retur_penjualan': [],
+        'penerimaan_kas': []
     }
     session['user_email'] = email
     return redirect(url_for('setup_perusahaan'))
@@ -857,7 +877,7 @@ def saldo_awal():
         }}
 
         function formatRupiah(el) {{
-            let angka = el.value.replace(/[^\\d]/g, '');
+            let angka = el.value.replace(/[^\d]/g, '');
             if (angka === "") {{
                 el.value = "";
             }} else {{
@@ -878,7 +898,7 @@ def saldo_awal():
             const inputs = document.querySelectorAll('#formSaldoAwal input[type="text"]');
             inputs.forEach(input => {{
                 if(input.id === 'debit_3-9999' || input.id === 'kredit_3-9999') return;
-                let val = parseInt(input.value.replace(/\\./g, '')) || 0;
+                let val = parseInt(input.value.replace(/\./g, '')) || 0;
                 if (input.name.startsWith('debit_')) {{
                     totalDebit += val;
                 }} else if (input.name.startsWith('kredit_')) {{
@@ -910,7 +930,7 @@ def saldo_awal():
                 banner.style.display = 'block';
                 let formattedSelisih = new Intl.NumberFormat('id-ID').format(Math.abs(selisihMurni));
                 let posisi = selisihMurni > 0 ? 'kredit' : 'debit';
-                textBanner.innerHTML = `Selisih Rp ` + formattedSelisih + ` — otomatis dimasukkan ke akun <strong>Historical Balancing</strong> (` + posisi + `). Saldo awal belum seimbang.`;
+                textBanner.innerHTML = `Selisih Rp ${{formattedSelisih}} — otomatis dimasukkan ke akun <strong>Historical Balancing</strong> (${{posisi}}). Saldo awal belum seimbang.`;
                 
                 statusBadge.style.backgroundColor = '#fef2f2';
                 statusBadge.style.color = '#dc2626';
@@ -948,10 +968,16 @@ def kartu_pelanggan():
     else:
         rows = ""
         total_piutang = 0
+        total_sisa_piutang = 0
         for p in list_pelanggan:
-            saldo_piutang = int(str(p.get('saldo_awal_piutang', 0)).replace('.', '') or 0)
+            saldo_piutang = int(p.get('saldo_awal_piutang', 0) or 0)
             total_piutang += saldo_piutang
+            
+            sisa_piutang_dyn = hitung_sisa_piutang_pelanggan(user_data, p.get('nama'))
+            total_sisa_piutang += sisa_piutang_dyn
+
             formatted_piutang = f"{saldo_piutang:,.0f}".replace(',', '.')
+            formatted_sisa = f"{sisa_piutang_dyn:,.0f}".replace(',', '.')
             
             rows += f"""
             <tr>
@@ -963,7 +989,7 @@ def kartu_pelanggan():
                 <td style="padding: 12px 20px;">{p.get('telepon')}</td>
                 <td style="padding: 12px 20px;">{p.get('syarat_bayar_str')}</td>
                 <td style="padding: 12px 20px; text-align: right;">{formatted_piutang}</td>
-                <td style="padding: 12px 20px; text-align: right;">{formatted_piutang}</td>
+                <td style="padding: 12px 20px; text-align: right; font-weight: 600; color: #b45309;">{formatted_sisa}</td>
                 <td style="padding: 12px 20px; text-align: right;">
                     <div class="action-container">
                         <a href="/kartu/pelanggan/ubah/{p.get('kode')}" class="btn-action">Ubah</a>
@@ -973,6 +999,7 @@ def kartu_pelanggan():
             </tr>
             """
         formatted_total = f"{total_piutang:,.0f}".replace(',', '.')
+        formatted_total_sisa = f"{total_sisa_piutang:,.0f}".replace(',', '.')
         table_html = f"""
         <div class="account-card">
             <table class="account-table">
@@ -991,7 +1018,7 @@ def kartu_pelanggan():
                     {rows}
                     <tr style="background-color: #f9fafb; font-weight: 600;">
                         <td colspan="5" style="padding: 12px 20px;">Total sisa piutang</td>
-                        <td style="padding: 12px 20px; text-align: right;">{formatted_total}</td>
+                        <td style="padding: 12px 20px; text-align: right; color: #b45309;">{formatted_total_sisa}</td>
                         <td></td>
                     </tr>
                 </tbody>
@@ -1003,7 +1030,7 @@ def kartu_pelanggan():
     <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 25px;">
         <div>
             <div class="page-title">Pelanggan</div>
-            <div class="page-desc" style="margin-bottom: 0;">Kartu pelanggan. Saldo awal piutang menjadi catatan di bagian atas jurnal penjualan.</div>
+            <div class="page-desc" style="margin-bottom: 0;">Kartu pelanggan. Saldo awal & total sisa piutang berubah otomatis sesuai penjualan, retur, dan pelunasan.</div>
         </div>
         <div>
             <a href="/kartu/pelanggan/baru" style="background-color: #d18a99; color: white; padding: 10px 18px; border-radius: 6px; font-size: 14px; font-weight: 500; text-decoration: none; display: inline-block;">+ Pelanggan baru</a>
@@ -1180,14 +1207,14 @@ def tambah_pelanggan():
             const header = document.getElementById('labelTerminHeader');
             
             if(pot !== '' && jb !== '') {{
-                header.textContent = 'Termin kredit — ' + pot + '/' + jb + ', n/' + jt;
+                header.textContent = `Termin kredit — ${{pot}}/${{jb}}, n/${{jt}}`;
             }} else {{
-                header.textContent = 'Termin kredit — n/' + jt;
+                header.textContent = `Termin kredit — n/${{jt}}`;
             }}
         }}
 
         function formatRupiah(el) {{
-            let angka = el.value.replace(/[^\\d]/g, '');
+            let angka = el.value.replace(/[^\d]/g, '');
             if (angka === "") {{
                 el.value = "";
             }} else {{
@@ -1263,7 +1290,7 @@ def ubah_pelanggan(kode):
     else:
         termin_header_text = f"Termin kredit — n/{jt_val}"
 
-    formatted_piutang = f"{int(str(target_plg.get('saldo_awal_piutang', 0)).replace('.', '') or 0):,.0f}".replace(',', '.') if target_plg.get('saldo_awal_piutang') else ""
+    formatted_piutang = f"{int(target_plg.get('saldo_awal_piutang', 0) or 0):,.0f}".replace(',', '.') if target_plg.get('saldo_awal_piutang') else ""
 
     modal_content = f"""
     <div class="modal-backdrop">
@@ -1370,14 +1397,14 @@ def ubah_pelanggan(kode):
             const header = document.getElementById('labelTerminHeader');
             
             if(pot !== '' && jb !== '') {{
-                header.textContent = 'Termin kredit — ' + pot + '/' + jb + ', n/' + jt;
+                header.textContent = `Termin kredit — ${{pot}}/${{jb}}, n/${{jt}}`;
             }} else {{
-                header.textContent = 'Termin kredit — n/' + jt;
+                header.textContent = `Termin kredit — n/${{jt}}`;
             }}
         }}
 
         function formatRupiah(el) {{
-            let angka = el.value.replace(/[^\\d]/g, '');
+            let angka = el.value.replace(/[^\d]/g, '');
             if (angka === "") {{
                 el.value = "";
             }} else {{
@@ -1400,7 +1427,6 @@ def hapus_pelanggan(kode):
     sync_saldo_awal_penjualan(email)
     return redirect(url_for('kartu_pelanggan'))
 
-# --- KARTU PEMASOK ROUTES ---
 @app.route('/kartu/pemasok')
 def kartu_pemasok():
     if 'user_email' not in session:
@@ -1420,7 +1446,7 @@ def kartu_pemasok():
         rows = ""
         total_utang = 0
         for s in list_pemasok:
-            saldo_utang = int(str(s.get('saldo_awal_utang', 0)).replace('.', '') or 0)
+            saldo_utang = int(s.get('saldo_awal_utang', 0) or 0)
             total_utang += saldo_utang
             formatted_utang = f"{saldo_utang:,.0f}".replace(',', '.')
             
@@ -1650,14 +1676,14 @@ def tambah_pemasok():
             const header = document.getElementById('labelTerminHeader');
             
             if(pot !== '' && jb !== '') {{
-                header.textContent = 'Termin kredit — ' + pot + '/' + jb + ', n/' + jt;
+                header.textContent = `Termin kredit — ${{pot}}/${{jb}}, n/${{jt}}`;
             }} else {{
-                header.textContent = 'Termin kredit — n/' + jt;
+                header.textContent = `Termin kredit — n/${{jt}}`;
             }}
         }}
 
         function formatRupiah(el) {{
-            let angka = el.value.replace(/[^\\d]/g, '');
+            let angka = el.value.replace(/[^\d]/g, '');
             if (angka === "") {{
                 el.value = "";
             }} else {{
@@ -1732,7 +1758,7 @@ def ubah_pemasok(kode):
     else:
         termin_header_text = f"Termin kredit — n/{jt_val}"
 
-    formatted_utang = f"{int(str(target_pms.get('saldo_awal_utang', 0)).replace('.', '') or 0):,.0f}".replace(',', '.') if target_pms.get('saldo_awal_utang') else ""
+    formatted_utang = f"{int(target_pms.get('saldo_awal_utang', 0) or 0):,.0f}".replace(',', '.') if target_pms.get('saldo_awal_utang') else ""
 
     modal_content = f"""
     <div class="modal-backdrop">
@@ -1839,14 +1865,14 @@ def ubah_pemasok(kode):
             const header = document.getElementById('labelTerminHeader');
             
             if(pot !== '' && jb !== '') {{
-                header.textContent = 'Termin kredit — ' + pot + '/' + jb + ', n/' + jt;
+                header.textContent = `Termin kredit — ${{pot}}/${{jb}}, n/${{jt}}`;
             }} else {{
-                header.textContent = 'Termin kredit — n/' + jt;
+                header.textContent = `Termin kredit — n/${{jt}}`;
             }}
         }}
 
         function formatRupiah(el) {{
-            let angka = el.value.replace(/[^\\d]/g, '');
+            let angka = el.value.replace(/[^\d]/g, '');
             if (angka === "") {{
                 el.value = "";
             }} else {{
@@ -1868,7 +1894,6 @@ def hapus_pemasok(kode):
     database_user[email]['pemasok'] = [s for s in database_user[email]['pemasok'] if s['kode'] != kode]
     return redirect(url_for('kartu_pemasok'))
 
-# --- KARTU BARANG ROUTES ---
 @app.route('/kartu/barang')
 def kartu_barang():
     if 'user_email' not in session:
@@ -1888,9 +1913,9 @@ def kartu_barang():
         rows = ""
         total_nilai_persediaan = 0
         for b in list_barang:
-            qty = float(str(b.get('qty_awal', 0)).replace('.', '') or 0)
-            hp = float(str(b.get('harga_pokok', 0)).replace('.', '') or 0)
-            hj = float(str(b.get('harga_jual', 0)).replace('.', '') or 0)
+            qty = float(b.get('qty_awal', 0) or 0)
+            hp = float(b.get('harga_pokok', 0) or 0)
+            hj = float(b.get('harga_jual', 0) or 0)
             nilai = int(qty * hp)
             total_nilai_persediaan += nilai
             
@@ -1904,7 +1929,7 @@ def kartu_barang():
                 <td style="padding: 12px 20px;"><strong>{b.get('kode')}</strong></td>
                 <td style="padding: 12px 20px;">
                     <div style="font-weight: 600; color: #1f2937;">{b.get('nama')}</div>
-                    <div style="font-size: 12px; color: #6b7280;">Stok tersedia: {formatted_qty} {b.get('satuan')} × {formatted_hp}</div>
+                    <div style="font-size: 12px; color: #6b7280;">Saldo awal: {formatted_qty} {b.get('satuan')} × {formatted_hp}</div>
                 </td>
                 <td style="padding: 12px 20px; text-align: right;">{formatted_hj}</td>
                 <td style="padding: 12px 20px;">{formatted_qty} {b.get('satuan')}</td>
@@ -1950,7 +1975,7 @@ def kartu_barang():
     <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 25px;">
         <div>
             <div class="page-title">Barang</div>
-            <div class="page-desc" style="margin-bottom: 0;">Kartu barang. Persediaan perpetual dengan metode rata-rata bergerak. Penjualan otomatis mengurangi stok barang.</div>
+            <div class="page-desc" style="margin-bottom: 0;">Kartu barang. Persediaan perpetual dengan metode rata-rata bergerak. Saldo awal = qty awal × harga pokok.</div>
         </div>
         <div>
             <a href="/kartu/barang/baru" style="background-color: #d18a99; color: white; padding: 10px 18px; border-radius: 6px; font-size: 14px; font-weight: 500; text-decoration: none; display: inline-block;">+ Barang baru</a>
@@ -2069,7 +2094,7 @@ def tambah_barang():
     
     <script>
         function formatRupiah(el) {{
-            let angka = el.value.replace(/[^\\d]/g, '');
+            let angka = el.value.replace(/[^\d]/g, '');
             if (angka === "") {{
                 el.value = "";
             }} else {{
@@ -2079,8 +2104,8 @@ def tambah_barang():
         }}
 
         function hitungNilaiPersediaan() {{
-            const qty = parseFloat(document.getElementById('inputQty').value.replace(/\\./g, '')) || 0;
-            const hp = parseFloat(document.getElementById('inputHargaPokok').value.replace(/\\./g, '')) || 0;
+            const qty = parseFloat(document.getElementById('inputQty').value.replace(/\./g, '')) || 0;
+            const hp = parseFloat(document.getElementById('inputHargaPokok').value.replace(/\./g, '')) || 0;
             const total = qty * hp;
             document.getElementById('displayNilai').textContent = new Intl.NumberFormat('id-ID').format(total);
         }}
@@ -2120,12 +2145,12 @@ def ubah_barang(kode):
 
     checked_aktif = "checked" if target_brg.get('aktif', True) else ""
     
-    hj_val = f"{int(str(target_brg.get('harga_jual', 0)).replace('.', '') or 0):,.0f}".replace(',', '.') if target_brg.get('harga_jual') else ""
-    qty_raw = float(str(target_brg.get('qty_awal', 0)).replace('.', '') or 0)
+    hj_val = f"{int(target_brg.get('harga_jual', 0) or 0):,.0f}".replace(',', '.') if target_brg.get('harga_jual') else ""
+    qty_raw = float(target_brg.get('qty_awal', 0) or 0)
     qty_val = f"{int(qty_raw):,}".replace(',', '.') if qty_raw.is_integer() else f"{qty_raw}"
-    hp_val = f"{float(str(target_brg.get('harga_pokok', 0)).replace('.', '') or 0):,.0f}".replace(',', '.') if target_brg.get('harga_pokok') else ""
+    hp_val = f"{float(target_brg.get('harga_pokok', 0) or 0):,.0f}".replace(',', '.') if target_brg.get('harga_pokok') else ""
     
-    initial_nilai = int(qty_raw * (float(str(target_brg.get('harga_pokok', 0)).replace('.', '') or 0)))
+    initial_nilai = int(qty_raw * (float(target_brg.get('harga_pokok', 0) or 0)))
     formatted_initial_nilai = f"{initial_nilai:,.0f}".replace(',', '.')
 
     modal_content = f"""
@@ -2197,7 +2222,7 @@ def ubah_barang(kode):
     
     <script>
         function formatRupiah(el) {{
-            let angka = el.value.replace(/[^\\d]/g, '');
+            let angka = el.value.replace(/[^\d]/g, '');
             if (angka === "") {{
                 el.value = "";
             }} else {{
@@ -2207,8 +2232,8 @@ def ubah_barang(kode):
         }}
 
         function hitungNilaiPersediaan() {{
-            const qty = parseFloat(document.getElementById('inputQty').value.replace(/\\./g, '')) || 0;
-            const hp = parseFloat(document.getElementById('inputHargaPokok').value.replace(/\\./g, '')) || 0;
+            const qty = parseFloat(document.getElementById('inputQty').value.replace(/\./g, '')) || 0;
+            const hp = parseFloat(document.getElementById('inputHargaPokok').value.replace(/\./g, '')) || 0;
             const total = qty * hp;
             document.getElementById('displayNilai').textContent = new Intl.NumberFormat('id-ID').format(total);
         }}
@@ -2226,7 +2251,6 @@ def hapus_barang(kode):
     database_user[email]['barang'] = [b for b in database_user[email]['barang'] if b['kode'] != kode]
     return redirect(url_for('kartu_barang'))
 
-# --- TRANSAKSI PENJUALAN ROUTES ---
 @app.route('/transaksi/penjualan')
 def transaksi_penjualan():
     if 'user_email' not in session:
@@ -2234,9 +2258,7 @@ def transaksi_penjualan():
     
     email = session['user_email']
     user_data = database_user.get(email, {})
-    
     sync_saldo_awal_penjualan(email)
-    
     list_penjualan = user_data.get('penjualan', [])
 
     if not list_penjualan:
@@ -2247,7 +2269,7 @@ def transaksi_penjualan():
         """
         table_jurnal_html = """
         <div style="padding: 40px 20px; text-align: center; color: #6b7280; font-size: 13px;">
-            Belum ada jurnal penjualan riil pada periode ini.
+            Belum ada jurnal pada periode ini.
         </div>
         """
     else:
@@ -2256,7 +2278,7 @@ def transaksi_penjualan():
         total_nilai_trx = 0
         total_nilai_sisa = 0
         count_trx = 0
-        count_jurnal_trx = 0
+        count_jurnal = 0
         
         sum_piutang = 0
         sum_hpp = 0
@@ -2267,7 +2289,7 @@ def transaksi_penjualan():
         for tr in list_penjualan:
             count_trx += 1
             try:
-                t_val = int(str(tr.get('total', '0')).replace('.', ''))
+                t_val = int(tr.get('total', '0').replace('.', ''))
             except:
                 t_val = 0
             total_nilai_trx += t_val
@@ -2280,57 +2302,67 @@ def transaksi_penjualan():
             total_nilai_sisa += s_val
 
             no_faktur_display = tr.get('nomor')
-            is_sa = tr.get('is_saldo_awal', False)
-            if is_sa:
+            if tr.get('is_saldo_awal', False):
                 no_faktur_display += ' <span class="badge-saldo-awal">Saldo awal</span>'
 
             detail_url = f"/transaksi/penjualan/ubah/{tr.get('nomor')}"
+            
+            status_badge_html = f'<span class="badge-lunas">Lunas</span>' if s_val == 0 else f'<span class="badge-belum-lunas">{tr.get("status", "Belum lunas")}</span>'
 
             rows_p += f"""
             <tr>
                 <td style="padding: 12px 20px;">{tr.get('tanggal_indo', tr.get('tanggal'))}</td>
                 <td style="padding: 12px 20px;"><a href="{detail_url}" style="color: #d18a99; font-weight: 600; text-decoration: none;">{no_faktur_display}</a></td>
                 <td style="padding: 12px 20px;">{tr.get('pelanggan')}</td>
-                <td style="padding: 12px 20px;"><span class="badge-belum-lunas">{tr.get('status', 'Belum lunas')}</span></td>
+                <td style="padding: 12px 20px;">{status_badge_html}</td>
                 <td style="padding: 12px 20px;">{tr.get('jatuh_tempo', '-')}</td>
                 <td style="padding: 12px 20px; text-align: right;">{tr.get('total')}</td>
-                <td style="padding: 12px 20px; text-align: right; color: #b45309; font-weight: 500;">{sisa_str}</td>
+                <td style="padding: 12px 20px; text-align: right; color: #b45309; font-weight: 500;">{f"{s_val:,.0f}".replace(',', '.')}</td>
             </tr>
             """
             
-            if not is_sa:
-                count_jurnal_trx += 1
-                piutang_val = t_val
-                hpp_val = int(str(tr.get('total_hpp', 0)).replace('.', '') or 0)
-                persediaan_val = hpp_val
-                ppn_val = int(str(tr.get('ppn', 0)).replace('.', '') or 0)
-                
-                subtotal_net = int(str(tr.get('subtotal', 0)).replace('.', '') or 0)
-                penjualan_val = subtotal_net if subtotal_net > 0 else (piutang_val - ppn_val)
+            if tr.get('is_saldo_awal', False):
+                continue
 
-                sum_piutang += piutang_val
-                sum_hpp += hpp_val
-                sum_persediaan += persediaan_val
-                sum_ppn += ppn_val
-                sum_penjualan += penjualan_val
+            count_jurnal += 1
+            piutang_val = t_val
+            hpp_val = int(tr.get('total_hpp', 0) or 0)
+            persediaan_val = hpp_val
+            
+            dpp_val = int(tr.get('dpp', 0) or 0)
+            ppn_val = int(tr.get('ppn', 0) or 0)
+            if dpp_val == 0 and ppn_val == 0:
+                ppn_persen = float(tr.get('ppn_persen', 0) or 0)
+                if ppn_persen > 0:
+                    dpp_val = int(piutang_val / (1 + ppn_persen / 100))
+                    ppn_val = piutang_val - dpp_val
+                else:
+                    dpp_val = piutang_val
+                    ppn_val = 0
 
-                ket_jurnal = f"Penjualan kredit - {tr.get('pelanggan')}"
-                if tr.get('memo'):
-                    ket_jurnal += f" ({tr.get('memo')})"
+            sum_piutang += piutang_val
+            sum_hpp += hpp_val
+            sum_persediaan += persediaan_val
+            sum_ppn += ppn_val
+            sum_penjualan += dpp_val
 
-                rows_j += f"""
-                <tr>
-                    <td style="padding: 12px 20px; white-space: nowrap;">{tr.get('tanggal_indo', tr.get('tanggal'))}</td>
-                    <td style="padding: 12px 20px;"><a href="{detail_url}" style="color: #d18a99; font-weight: 600; text-decoration: none;">{tr.get('nomor')}</a></td>
-                    <td style="padding: 12px 20px;">{ket_jurnal}</td>
-                    <td style="padding: 12px 20px; text-align: right;">{f"{piutang_val:,.0f}".replace(',', '.') if piutang_val > 0 else '-'}</td>
-                    <td style="padding: 12px 20px; text-align: right;">{f"{hpp_val:,.0f}".replace(',', '.') if hpp_val > 0 else '-'}</td>
-                    <td style="padding: 12px 20px; text-align: right;">{f"{persediaan_val:,.0f}".replace(',', '.') if persediaan_val > 0 else '-'}</td>
-                    <td style="padding: 12px 20px; text-align: right;">{f"{ppn_val:,.0f}".replace(',', '.') if ppn_val > 0 else '-'}</td>
-                    <td style="padding: 12px 20px; text-align: right;">{f"{penjualan_val:,.0f}".replace(',', '.') if penjualan_val > 0 else '-'}</td>
-                </tr>
-                """
-        
+            ket_jurnal = f"Penjualan kredit - {tr.get('pelanggan')}"
+            if tr.get('memo'):
+                ket_jurnal += f" ({tr.get('memo')})"
+
+            rows_j += f"""
+            <tr>
+                <td style="padding: 12px 20px; white-space: nowrap;">{tr.get('tanggal_indo', tr.get('tanggal'))}</td>
+                <td style="padding: 12px 20px;"><a href="{detail_url}" style="color: #d18a99; font-weight: 600; text-decoration: none;">{tr.get('nomor')}</a></td>
+                <td style="padding: 12px 20px;">{ket_jurnal}</td>
+                <td style="padding: 12px 20px; text-align: right;">{f"{piutang_val:,.0f}".replace(',', '.') if piutang_val > 0 else '-'}</td>
+                <td style="padding: 12px 20px; text-align: right;">{f"{hpp_val:,.0f}".replace(',', '.') if hpp_val > 0 else '-'}</td>
+                <td style="padding: 12px 20px; text-align: right;">{f"{persediaan_val:,.0f}".replace(',', '.') if persediaan_val > 0 else '-'}</td>
+                <td style="padding: 12px 20px; text-align: right;">{f"{ppn_val:,.0f}".replace(',', '.') if ppn_val > 0 else '-'}</td>
+                <td style="padding: 12px 20px; text-align: right;">{f"{dpp_val:,.0f}".replace(',', '.') if dpp_val > 0 else '-'}</td>
+            </tr>
+            """
+            
         formatted_total_trx = f"{total_nilai_trx:,.0f}".replace(',', '.')
         formatted_total_sisa = f"{total_nilai_sisa:,.0f}".replace(',', '.')
         
@@ -2352,16 +2384,16 @@ def transaksi_penjualan():
                 <tr style="background-color: #f9fafb; font-weight: 600;">
                     <td colspan="5" style="padding: 12px 20px;">Total ({count_trx} transaksi)</td>
                     <td style="padding: 12px 20px; text-align: right;">{formatted_total_trx}</td>
-                    <td style="padding: 12px 20px; text-align: right;">{formatted_total_sisa}</td>
+                    <td style="padding: 12px 20px; text-align: right; color: #b45309;">{formatted_total_sisa}</td>
                 </tr>
             </tbody>
         </table>
         """
 
-        if count_jurnal_trx == 0:
+        if count_jurnal == 0:
             table_jurnal_html = """
             <div style="padding: 40px 20px; text-align: center; color: #6b7280; font-size: 13px;">
-                Belum ada transaksi penjualan riil (transaksi saldo awal kartu pelanggan dicatat terpisah pada menu Setup Saldo Awal).
+                Belum ada transaksi penjualan baru (saldo awal pelanggan tidak dimasukkan ke jurnal penjualan).
             </div>
             """
         else:
@@ -2390,7 +2422,7 @@ def transaksi_penjualan():
                 <tbody>
                     {rows_j}
                     <tr style="background-color: #f9fafb; font-weight: 600;">
-                        <td colspan="3" style="padding: 12px 20px;">Total ({count_jurnal_trx} bukti)</td>
+                        <td colspan="3" style="padding: 12px 20px;">Total ({count_jurnal} bukti)</td>
                         <td style="padding: 12px 20px; text-align: right;">{f"{sum_piutang:,.0f}".replace(',', '.')}</td>
                         <td style="padding: 12px 20px; text-align: right;">{f"{sum_hpp:,.0f}".replace(',', '.')}</td>
                         <td style="padding: 12px 20px; text-align: right;">{f"{sum_persediaan:,.0f}".replace(',', '.')}</td>
@@ -2406,7 +2438,7 @@ def transaksi_penjualan():
     <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
         <div>
             <div class="page-title">Penjualan</div>
-            <div class="page-desc" style="margin-bottom: 0;">Transaksi penjualan tunai & kredit. Jurnal penjualan, PPN Keluaran, dan HPP terbentuk otomatis sesuai ketentuan dan mengurangi stok barang.</div>
+            <div class="page-desc" style="margin-bottom: 0;">Transaksi penjualan tunai & kredit. Jurnal penjualan dan HPP (perpetual) terbentuk otomatis. Saldo awal dari kartu pelanggan tercatat di jurnal atas.</div>
         </div>
         <div>
             <a href="/transaksi/penjualan/baru" style="background-color: #d18a99; color: white; padding: 10px 18px; border-radius: 6px; font-size: 14px; font-weight: 500; text-decoration: none; display: inline-block;">+ Tambah Transaksi</a>
@@ -2455,46 +2487,40 @@ def tambah_transaksi_penjualan():
     if request.method == 'POST':
         tanggal = request.form.get('tanggal')
         pelanggan = request.form.get('pelanggan')
-        no_faktur = request.form.get('no_faktur', '').strip()
+        no_faktur = request.form.get('no_faktur').strip()
         if not no_faktur:
             no_faktur = f"BKM-{len(user_data.get('penjualan', [])) + 1:02d}"
         
         pembayaran = request.form.get('pembayaran')
-        termin = request.form.get('termin', '')
+        termin_pot = request.form.get('termin_pot', '')
+        termin_hari = request.form.get('termin_hari', '')
+        termin_jt = request.form.get('termin_jt', '30')
+        termin = f"{termin_pot}/{termin_hari}, n/{termin_jt}" if termin_pot and termin_hari else f"n/{termin_jt}"
         memo = request.form.get('memo', '')
         
         item_barangs = request.form.getlist('item_barang[]')
         item_qtys = request.form.getlist('item_qty[]')
         item_hargas = request.form.getlist('item_harga[]')
         
-        ppn_persen_raw = request.form.get('ppn_persen', '0').replace('-', '0')
-        ppn_persen = float(ppn_persen_raw) if ppn_persen_raw != '' else 0.0
+        ppn_persen_raw = request.form.get('ppn_persen', '0')
+        ppn_persen = float(ppn_persen_raw) if ppn_persen_raw != '' and ppn_persen_raw != '-' else 0.0
         
         diskon_jenis = request.form.get('diskon_jenis', 'Rp')
-        diskon_nilai_raw = request.form.get('diskon_nilai', '0').replace('-', '').replace('.', '')
-        diskon_nilai = float(diskon_nilai_raw or 0)
+        diskon_nilai = float(request.form.get('diskon_nilai', 0) or 0)
         
         beban_angkut = True if request.form.get('beban_angkut') else False
-        beban_angkut_nilai_raw = request.form.get('beban_angkut_nilai', '0').replace('.', '')
-        beban_angkut_nilai = float(beban_angkut_nilai_raw or 0) if beban_angkut else 0.0
+        beban_angkut_nilai = float(request.form.get('beban_angkut_nilai', 0) or 0) if beban_angkut else 0.0
         
         subtotal = 0
         total_hpp_transaksi = 0
         details = []
-        
         for i in range(len(item_barangs)):
             brg_str = item_barangs[i]
             if not brg_str:
                 continue
-            qty_raw = float(str(item_qtys[i]).replace('.', '') or 0)
-            if qty_raw <= 0:
-                continue
+            qty_raw = float(item_qtys[i].replace('.', '') or 0)
             qty = int(qty_raw) if qty_raw.is_integer() else qty_raw
-            
-            # PERBAIKAN UTAMA: Membersihkan format pemisah ribuan dan memastikan nilai harga murni
-            harga_str = str(item_hargas[i]).replace('.', '').replace(',', '').strip()
-            harga = float(harga_str or 0)
-            
+            harga = float(item_hargas[i].replace('.', '') or 0)
             jumlah = qty * harga
             subtotal += jumlah
             
@@ -2502,13 +2528,9 @@ def tambah_transaksi_penjualan():
             kode_brg_match = brg_str.split(' - ')[0].strip()
             for b in list_barang:
                 if b.get('kode') == kode_brg_match:
-                    hpp_unit = float(str(b.get('harga_pokok', 0)).replace('.', '') or 0)
-                    stok_sekarang = float(str(b.get('qty_awal', 0)).replace('.', '') or 0)
-                    b['qty_awal'] = max(0.0, stok_sekarang - qty_raw)
+                    hpp_unit = float(b.get('harga_pokok', 0) or 0)
                     break
-            
-            tot_hpp_item = qty_raw * hpp_unit
-            total_hpp_transaksi += tot_hpp_item
+            total_hpp_transaksi += (qty * hpp_unit)
 
             details.append({
                 'barang': brg_str, 
@@ -2516,21 +2538,19 @@ def tambah_transaksi_penjualan():
                 'harga': harga, 
                 'jumlah': jumlah,
                 'hpp_unit': hpp_unit,
-                'total_hpp': tot_hpp_item
+                'total_hpp': qty * hpp_unit
             })
             
         diskon_nominal = diskon_nilai if diskon_jenis == 'Rp' else (subtotal * diskon_nilai / 100)
-        
         dpp = subtotal - diskon_nominal
         ppn_nominal = dpp * (ppn_persen / 100)
         total_transaksi = dpp + ppn_nominal + beban_angkut_nilai
-        penjualan_val = dpp
-
+        
         formatted_total = f"{int(total_transaksi):,.0f}".replace(',', '.')
         
         try:
             dt_trx = datetime.strptime(tanggal, '%Y-%m-%d')
-            dt_jt = dt_trx + timedelta(days=30)
+            dt_jt = dt_trx + timedelta(days=int(termin_jt or 30))
             str_jt = format_tanggal_pendek_indo(dt_jt.strftime('%Y-%m-%d'))
         except:
             str_jt = "-"
@@ -2546,6 +2566,9 @@ def tambah_transaksi_penjualan():
             'sisa': formatted_total,
             'pembayaran': pembayaran,
             'termin': termin,
+            'termin_pot': termin_pot,
+            'termin_hari': termin_hari,
+            'termin_jt': termin_jt,
             'memo': memo,
             'ppn_persen': ppn_persen,
             'diskon_jenis': diskon_jenis,
@@ -2553,7 +2576,7 @@ def tambah_transaksi_penjualan():
             'beban_angkut': beban_angkut,
             'beban_angkut_nilai': beban_angkut_nilai,
             'total_hpp': total_hpp_transaksi,
-            'subtotal': penjualan_val,
+            'dpp': dpp,
             'ppn': ppn_nominal,
             'is_saldo_awal': False,
             'details': details
@@ -2565,13 +2588,14 @@ def tambah_transaksi_penjualan():
     today_date = datetime.now().strftime('%Y-%m-%d')
 
     options_pelanggan = ""
+    pelanggan_termin_map = {}
     for p in list_pelanggan:
         p_nama = p.get('nama')
-        p_termin_str = p.get('syarat_bayar_str', '')
-        p_pot = p.get('potongan', '')
-        p_jb = p.get('jika_bayar', '')
-        p_jt = p.get('jatuh_tempo', '30')
-        options_pelanggan += f'<option value="{p_nama}" data-termin="{p_termin_str}" data-pot="{p_pot}" data-jb="{p_jb}" data-jt="{p_jt}">{p.get("kode")} — {p_nama}</option>'
+        pot = p.get('potongan', '')
+        jb = p.get('jika_bayar', '')
+        jt = p.get('jatuh_tempo', '30') or '30'
+        pelanggan_termin_map[p_nama] = {'pot': pot, 'jb': jb, 'jt': jt}
+        options_pelanggan += f'<option value="{p_nama}">{p.get("kode")} — {p_nama}</option>'
 
     options_barang = "".join([f'<option value="{b.get("kode")} - {b.get("nama")}" data-harga="{b.get("harga_jual", 0)}" data-hpp="{b.get("harga_pokok", 0)}">{b.get("kode")} {b.get("nama")} (Stok: {b.get("qty_awal", 0)})</option>' for b in list_barang])
 
@@ -2603,16 +2627,14 @@ def tambah_transaksi_penjualan():
                 </div>
                 <div>
                     <label>Pelanggan (kode / nama) <span class="required">*</span></label>
-                    <select name="pelanggan" id="selectPelanggan" onchange="updateTerminPelanggan(this)" required>
+                    <select name="pelanggan" id="selectPelanggan" onchange="muatTerminPelanggan(this)" required>
                         <option value="">-- Pilih Pelanggan --</option>
                         {options_pelanggan}
                     </select>
-                    <div class="form-helper" id="helperPelangganInfo">Pilih pelanggan untuk memuat termin otomatis dari kartu pelanggan</div>
                 </div>
                 <div>
                     <label>No. faktur</label>
                     <input type="text" name="no_faktur" value="" placeholder="(kosong = otomatis)">
-                    <div class="form-helper">Isi manual atau kosongkan untuk otomatis</div>
                 </div>
             </div>
 
@@ -2623,16 +2645,14 @@ def tambah_transaksi_penjualan():
                         <option value="Kredit (dengan termin)">Kredit (dengan termin)</option>
                         <option value="Tunai">Tunai</option>
                     </select>
-                    <div class="form-helper" style="color: #6b7280;" id="helperKartu">Kartu: Kredit</div>
                 </div>
                 <div>
-                    <label>Termin: <span id="labelTerminNama">-</span></label>
+                    <label>Termin</label>
                     <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
                         <input type="text" name="termin_pot" id="inputTerminPot" value="" placeholder="-" style="text-align: center;">
                         <input type="text" name="termin_hari" id="inputTerminHari" value="" placeholder="-" style="text-align: center;">
-                        <input type="text" name="termin_jt" id="inputTerminJt" value="" placeholder="-" style="text-align: center;">
+                        <input type="text" name="termin_jt" id="inputTerminJt" value="30" style="text-align: center;">
                     </div>
-                    <div class="form-helper">% potongan · hari potongan · jatuh tempo (hari)</div>
                 </div>
                 <div>
                     <label>Memo</label>
@@ -2661,34 +2681,8 @@ def tambah_transaksi_penjualan():
                                     {options_barang}
                                 </select>
                             </td>
-                            <td><input type="text" name="item_qty[]" value="" placeholder="" oninput="hitungBaris(this)" style="border:none; width:100%; background:transparent; text-align:left;"></td>
-                            <td><input type="text" name="item_harga[]" value="" placeholder="" oninput="formatRupiahInput(this); hitungBaris(this);" style="border:none; width:100%; background:transparent; text-align:right;"></td>
-                            <td style="text-align: right;" class="col-jumlah">-</td>
-                            <td style="text-align: center;"><a href="#" onclick="hapusBaris(this); return false;" style="color: #dc2626; text-decoration: none;">✕</a></td>
-                        </tr>
-                        <tr>
-                            <td>2</td>
-                            <td>
-                                <select name="item_barang[]" onchange="updateHarga(this)" style="border:none; width:100%; background:transparent;">
-                                    <option value="">-- Pilih Barang --</option>
-                                    {options_barang}
-                                </select>
-                            </td>
                             <td><input type="text" name="item_qty[]" value="" oninput="hitungBaris(this)" style="border:none; width:100%; background:transparent; text-align:left;"></td>
-                            <td><input type="text" name="item_harga[]" value="" oninput="formatRupiahInput(this); hitungBaris(this);" style="border:none; width:100%; background:transparent; text-align:right;"></td>
-                            <td style="text-align: right;" class="col-jumlah">-</td>
-                            <td style="text-align: center;"><a href="#" onclick="hapusBaris(this); return false;" style="color: #dc2626; text-decoration: none;">✕</a></td>
-                        </tr>
-                        <tr>
-                            <td>3</td>
-                            <td>
-                                <select name="item_barang[]" onchange="updateHarga(this)" style="border:none; width:100%; background:transparent;">
-                                    <option value="">-- Pilih Barang --</option>
-                                    {options_barang}
-                                </select>
-                            </td>
-                            <td><input type="text" name="item_qty[]" value="" oninput="hitungBaris(this)" style="border:none; width:100%; background:transparent; text-align:left;"></td>
-                            <td><input type="text" name="item_harga[]" value="" oninput="formatRupiahInput(this); hitungBaris(this);" style="border:none; width:100%; background:transparent; text-align:right;"></td>
+                            <td><input type="text" name="item_harga[]" value="" oninput="hitungBaris(this)" style="border:none; width:100%; background:transparent; text-align:right;"></td>
                             <td style="text-align: right;" class="col-jumlah">-</td>
                             <td style="text-align: center;"><a href="#" onclick="hapusBaris(this); return false;" style="color: #dc2626; text-decoration: none;">✕</a></td>
                         </tr>
@@ -2696,13 +2690,12 @@ def tambah_transaksi_penjualan():
                 </table>
                 <div style="padding: 10px 20px; background: #f9fafb; display: flex; justify-content: space-between; align-items: center;">
                     <button type="button" onclick="tambahBaris()" style="background: none; border: none; color: #d18a99; font-weight: 600; cursor: pointer; font-size: 13px;">+ Tambah baris</button>
-                    <div style="font-size: 11px; color: #6b7280;">Enter/↓ bawah · ↑ atas · Tab kanan · Esc batal</div>
                 </div>
             </div>
 
             <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px; margin-bottom: 25px; font-size: 13px;">
                 <div style="display: flex; width: 420px; justify-content: space-between; padding: 4px 0;">
-                    <span style="color: #6b7280;">Subtotal (Penjualan)</span>
+                    <span style="color: #6b7280;">Subtotal</span>
                     <span id="displaySubtotal" style="font-weight: 600; min-width: 120px; text-align: right;">-</span>
                 </div>
                 <div style="display: flex; width: 420px; justify-content: space-between; align-items: center; padding: 4px 0;">
@@ -2712,11 +2705,11 @@ def tambah_transaksi_penjualan():
                             <option value="Rp">Rp</option>
                             <option value="%">%</option>
                         </select>
-                        <input type="text" name="diskon_nilai" value="" placeholder="-" onfocus="if(this.value==='-') this.value='';" onblur="if(this.value==='') this.value='-';" oninput="hitungTotalSemua()" style="padding: 4px; text-align: right; font-size: 12px; width: 95px;">
+                        <input type="text" name="diskon_nilai" value="" placeholder="-" oninput="hitungTotalSemua()" style="padding: 4px; text-align: right; font-size: 12px; width: 95px;">
                         <span id="displayDiskonNominal" style="min-width: 100px; text-align: right; font-weight: 500; color: #374151;">-</span>
                     </div>
                 </div>
-                
+
                 <div style="display: flex; flex-direction: column; width: 420px; padding: 4px 0;">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 0; color: #6b7280; font-weight: normal; cursor: pointer;">
@@ -2724,22 +2717,22 @@ def tambah_transaksi_penjualan():
                         </label>
                         <span id="displayBebanAngkutNominal" style="min-width: 120px; text-align: right; font-weight: 500; color: #374151;">-</span>
                     </div>
-                    <div id="panelBebanAngkut" style="display: none; background: #f9fafb; padding: 8px; border-radius: 6px; border: 1px solid #e5e7eb; margin-top: 6px; width: 180px; align-self: flex-end;">
-                        <label style="font-size: 11px; margin-bottom: 2px;">Nilai (Rp)</label>
-                        <input type="text" name="beban_angkut_nilai" id="inputBebanAngkutNilai" value="" placeholder="-" oninput="formatRupiah(this); hitungTotalSemua();" style="padding: 4px 6px; font-size: 12px;">
+                    <div id="panelBebanAngkut" style="display: none; background: #f9fafb; padding: 10px; border-radius: 6px; border: 1px solid #e5e7eb; margin-top: 8px;">
+                        <label style="font-size: 11px; margin-bottom: 4px;">Nilai Beban Angkut (Rp)</label>
+                        <input type="text" name="beban_angkut_nilai" id="inputBebanAngkutNilai" value="" placeholder="-" oninput="formatRupiah(this); hitungTotalSemua();" style="padding: 6px; font-size: 13px;">
                     </div>
                 </div>
 
                 <div style="display: flex; width: 420px; justify-content: space-between; align-items: center; padding: 4px 0;">
                     <span style="color: #6b7280;">PPN Keluaran</span>
                     <div style="display: flex; gap: 5px; align-items: center;">
-                        <input type="text" name="ppn_persen" value="" placeholder="-" onfocus="if(this.value==='-') this.value='';" onblur="if(this.value==='') this.value='-';" oninput="hitungTotalSemua()" style="width: 65px; padding: 4px; text-align: right; font-size: 12px;">
+                        <input type="text" name="ppn_persen" value="-" onfocus="if(this.value==='-') this.value='';" onblur="if(this.value==='') this.value='-';" oninput="hitungTotalSemua()" style="width: 65px; padding: 4px; text-align: right; font-size: 12px;">
                         <span style="margin-right: 15px;">%</span>
                         <span id="displayPpnNominal" style="min-width: 100px; text-align: right; font-weight: 500; color: #374151;">-</span>
                     </div>
                 </div>
                 <div style="display: flex; width: 420px; justify-content: space-between; border-top: 2px solid #e5e7eb; padding-top: 10px; font-size: 15px; font-weight: bold; color: #1f2937;">
-                    <span>Total (Piutang Usaha)</span>
+                    <span>Total</span>
                     <span id="displayTotal" style="min-width: 120px; text-align: right;">-</span>
                 </div>
             </div>
@@ -2752,26 +2745,27 @@ def tambah_transaksi_penjualan():
     </div>
     
     <script>
-        function updateTerminPelanggan(selectEl) {{
-            const selectedOpt = selectEl.options[selectEl.selectedIndex];
-            const terminStr = selectedOpt.getAttribute('data-termin') || '-';
-            const pot = selectedOpt.getAttribute('data-pot') || '';
-            const jb = selectedOpt.getAttribute('data-jb') || '';
-            const jt = selectedOpt.getAttribute('data-jt') || '';
-            
-            document.getElementById('labelTerminNama').textContent = terminStr;
-            document.getElementById('inputTerminPot').value = pot;
-            document.getElementById('inputTerminHari').value = jb;
-            document.getElementById('inputTerminJt').value = jt;
-            document.getElementById('helperPelangganInfo').textContent = "Termin otomatis dari kartu: " + terminStr;
+        const pelangganTerminMap = {json.dumps(pelanggan_termin_map)};
+
+        function muatTerminPelanggan(selectEl) {{
+            const namaPlg = selectEl.value;
+            if (pelangganTerminMap[namaPlg]) {{
+                const t = pelangganTerminMap[namaPlg];
+                document.getElementById('inputTerminPot').value = t.pot || '';
+                document.getElementById('inputTerminHari').value = t.jb || '';
+                document.getElementById('inputTerminJt').value = t.jt || '30';
+            }} else {{
+                document.getElementById('inputTerminPot').value = '';
+                document.getElementById('inputTerminHari').value = '';
+                document.getElementById('inputTerminJt').value = '30';
+            }}
         }}
 
         function toggleBebanAngkutPanel() {{
             const chk = document.getElementById('checkboxBebanAngkut');
             const panel = document.getElementById('panelBebanAngkut');
-            if(chk.checked) {{
-                panel.style.display = 'block';
-            }} else {{
+            if(chk.checked) {{ panel.style.display = 'block'; }}
+            else {{
                 panel.style.display = 'none';
                 document.getElementById('inputBebanAngkutNilai').value = '';
                 hitungTotalSemua();
@@ -2787,74 +2781,51 @@ def tambah_transaksi_penjualan():
             hitungBaris(hargaInput);
         }}
 
-        function formatRupiahInput(el) {{
-            let angka = el.value.replace(/[^\\d]/g, '');
-            if (angka === "") {{
-                el.value = "";
-            }} else {{
-                el.value = new Intl.NumberFormat('id-ID').format(parseInt(angka, 10));
-            }}
-        }}
-
         function hitungBaris(el) {{
             const row = el.closest('tr');
-            const qty = parseFloat(row.querySelector('input[name="item_qty[]"]').value.replace(/\\./g, '')) || 0;
-            const harga = parseFloat(row.querySelector('input[name="item_harga[]"]').value.replace(/\\./g, '').replace(/,/g, '')) || 0;
+            const qty = parseFloat(row.querySelector('input[name="item_qty[]"]').value.replace(/\./g, '')) || 0;
+            const harga = parseFloat(row.querySelector('input[name="item_harga[]"]').value.replace(/\./g, '')) || 0;
             const jumlah = qty * harga;
             row.querySelector('.col-jumlah').textContent = jumlah > 0 ? new Intl.NumberFormat('id-ID').format(jumlah) : '-';
             hitungTotalSemua();
         }}
 
         function formatRupiah(el) {{
-            let angka = el.value.replace(/[^\\d]/g, '');
-            if (angka === "") {{
-                el.value = "";
-            }} else {{
-                let formatted = new Intl.NumberFormat('id-ID').format(angka);
-                el.value = formatted;
-            }}
+            let angka = el.value.replace(/[^\d]/g, '');
+            if (angka === "") {{ el.value = ""; }}
+            else {{ el.value = new Intl.NumberFormat('id-ID').format(angka); }}
         }}
 
         function hitungTotalSemua() {{
             let subtotal = 0;
             document.querySelectorAll('#tbodyItem tr').forEach(row => {{
-                const qty = parseFloat(row.querySelector('input[name="item_qty[]"]').value.replace(/\\./g, '')) || 0;
-                const harga = parseFloat(row.querySelector('input[name="item_harga[]"]').value.replace(/\\./g, '').replace(/,/g, '')) || 0;
+                const qty = parseFloat(row.querySelector('input[name="item_qty[]"]').value.replace(/\./g, '')) || 0;
+                const harga = parseFloat(row.querySelector('input[name="item_harga[]"]').value.replace(/\./g, '')) || 0;
                 subtotal += (qty * harga);
             }});
             
             document.getElementById('displaySubtotal').textContent = subtotal > 0 ? new Intl.NumberFormat('id-ID').format(subtotal) : '-';
 
             const diskonJenis = document.querySelector('select[name="diskon_jenis"]').value;
-            const diskonNilaiRaw = document.querySelector('input[name="diskon_nilai"]').value;
-            const diskonNilai = (diskonNilaiRaw === '' || diskonNilaiRaw === '-') ? 0 : (parseFloat(diskonNilaiRaw.replace(/\\./g, '')) || 0);
+            const diskonNilai = parseFloat(document.querySelector('input[name="diskon_nilai"]').value.replace(/\./g, '')) || 0;
             let diskonNominal = diskonJenis === 'Rp' ? diskonNilai : (subtotal * diskonNilai / 100);
             
             const elDiskon = document.getElementById('displayDiskonNominal');
-            if (diskonNominal > 0) {{
-                elDiskon.textContent = '- ' + new Intl.NumberFormat('id-ID').format(diskonNominal);
-            }} else {{
-                elDiskon.textContent = '-';
-            }}
+            elDiskon.textContent = diskonNominal > 0 ? '(Rp ' + new Intl.NumberFormat('id-ID').format(diskonNominal) + ')' : '-';
 
             const dpp = subtotal - diskonNominal;
-
             const ppnPersenRaw = document.querySelector('input[name="ppn_persen"]').value;
-            const ppnPersen = (ppnPersenRaw === '' || ppnPersenRaw === '-') ? 0 : (parseFloat(ppnPersenRaw.replace(/\\./g, '')) || 0);
-            
+            const ppnPersen = (ppnPersenRaw === '' || ppnPersenRaw === '-') ? 0 : (parseFloat(ppnPersenRaw.replace(/\./g, '')) || 0);
             const ppnNominal = dpp * (ppnPersen / 100);
 
-            const elPpn = document.getElementById('displayPpnNominal');
-            elPpn.textContent = ppnNominal > 0 ? new Intl.NumberFormat('id-ID').format(ppnNominal) : '-';
+            document.getElementById('displayPpnNominal').textContent = ppnNominal > 0 ? new Intl.NumberFormat('id-ID').format(ppnNominal) : '-';
 
             let bebanAngkutNilai = 0;
             const chk = document.getElementById('checkboxBebanAngkut');
             if(chk && chk.checked) {{
-                const bebanRaw = document.getElementById('inputBebanAngkutNilai').value;
-                bebanAngkutNilai = (bebanRaw === '' || bebanRaw === '-') ? 0 : (parseFloat(bebanRaw.replace(/\\./g, '')) || 0);
+                bebanAngkutNilai = parseFloat(document.getElementById('inputBebanAngkutNilai').value.replace(/\./g, '')) || 0;
             }}
-            const elBeban = document.getElementById('displayBebanAngkutNominal');
-            elBeban.textContent = bebanAngkutNilai > 0 ? new Intl.NumberFormat('id-ID').format(bebanAngkutNilai) : '-';
+            document.getElementById('displayBebanAngkutNominal').textContent = bebanAngkutNilai > 0 ? new Intl.NumberFormat('id-ID').format(bebanAngkutNilai) : '-';
 
             const total = dpp + ppnNominal + bebanAngkutNilai;
             document.getElementById('displayTotal').textContent = total > 0 ? new Intl.NumberFormat('id-ID').format(total) : '-';
@@ -2865,7 +2836,7 @@ def tambah_transaksi_penjualan():
             const rowCount = tbody.rows.length + 1;
             const newRow = document.createElement('tr');
             newRow.innerHTML = `
-                <td>` + rowCount + `</td>
+                <td>${{rowCount}}</td>
                 <td>
                     <select name="item_barang[]" onchange="updateHarga(this)" style="border:none; width:100%; background:transparent;">
                         <option value="">-- Pilih Barang --</option>
@@ -2873,7 +2844,7 @@ def tambah_transaksi_penjualan():
                     </select>
                 </td>
                 <td><input type="text" name="item_qty[]" value="" oninput="hitungBaris(this)" style="border:none; width:100%; background:transparent; text-align:left;"></td>
-                <td><input type="text" name="item_harga[]" value="" oninput="formatRupiahInput(this); hitungBaris(this);" style="border:none; width:100%; background:transparent; text-align:right;"></td>
+                <td><input type="text" name="item_harga[]" value="" oninput="hitungBaris(this)" style="border:none; width:100%; background:transparent; text-align:right;"></td>
                 <td style="text-align: right;" class="col-jumlah">-</td>
                 <td style="text-align: center;"><a href="#" onclick="hapusBaris(this); return false;" style="color: #dc2626; text-decoration: none;">✕</a></td>
             `;
@@ -2887,11 +2858,6 @@ def tambah_transaksi_penjualan():
                 hitungTotalSemua();
             }}
         }}
-
-        window.onload = function() {{
-            document.querySelector('input[name="ppn_persen"]').value = '-';
-            document.querySelector('input[name="diskon_nilai"]').value = '-';
-        }};
     </script>
     """
     
@@ -2918,7 +2884,6 @@ def ubah_transaksi_penjualan_detail(nomor):
         return redirect(url_for('transaksi_penjualan'))
 
     options_pelanggan = "".join([f'<option value="{p.get("nama")}" {"selected" if p.get("nama") == target_trx.get("pelanggan") else ""}>{p.get("kode")} — {p.get("nama")}</option>' for p in list_pelanggan])
-    options_barang = "".join([f'<option value="{b.get("kode")} - {b.get("nama")}" data-harga="{b.get("harga_jual", 0)}" data-hpp="{b.get("harga_pokok", 0)}">{b.get("kode")} {b.get("nama")} (Stok: {b.get("qty_awal", 0)})</option>' for b in list_barang])
 
     rows_item_html = ""
     details = target_trx.get('details', [])
@@ -2930,35 +2895,23 @@ def ubah_transaksi_penjualan_detail(nomor):
 
     for idx, det in enumerate(details):
         r_num = idx + 1
-        q_raw = float(str(det.get('qty', 0)).replace('.', '') or 0)
+        q_raw = float(det.get('qty', 0) or 0)
         q_val = f"{int(q_raw)}" if q_raw.is_integer() else f"{q_raw}"
-        h_val = f"{int(str(det.get('harga', 0)).replace('.', '') or 0):,.0f}".replace(',', '.') if det.get('harga') else ''
-        j_val = f"{int(str(det.get('jumlah', 0)).replace('.', '') or 0):,.0f}".replace(',', '.') if det.get('jumlah') else '-'
+        h_val = f"{int(det.get('harga', 0)):,.0f}".replace(',', '.') if det.get('harga') else ''
+        j_val = f"{int(det.get('jumlah', 0)):,.0f}".replace(',', '.') if det.get('jumlah') else '-'
         
-        hpp_u = 0
-        brg_str = det.get('barang', '')
-        if brg_str:
-            kode_brg_match = brg_str.split(' - ')[0].strip()
-            for b in list_barang:
-                if b.get('kode') == kode_brg_match:
-                    hpp_u = float(str(b.get('harga_pokok', 0)).replace('.', '') or 0)
-                    break
-        if hpp_u == 0:
-            hpp_u = float(str(det.get('hpp_unit', 0)).replace('.', '') or 0)
-
-        tot_hpp = q_raw * hpp_u
+        hpp_u = float(det.get('hpp_unit', 0) or 0)
+        tot_hpp = float(det.get('total_hpp', 0) or 0)
         total_hpp_trx += tot_hpp
 
         formatted_hpp_u = f"{hpp_u:,.0f}".replace(',', '.')
         formatted_tot_hpp = f"{tot_hpp:,.0f}".replace(',', '.')
-        formatted_qty = q_val
-
-        nama_brg_bersih = brg_str if brg_str else '-'
+        nama_brg_bersih = det.get('barang', '-')
         
         rows_hpp_baris_html += f"""
         <tr>
             <td>{nama_brg_bersih}</td>
-            <td>{formatted_qty}</td>
+            <td>{q_val}</td>
             <td style="text-align: right;">{formatted_hpp_u}</td>
             <td style="text-align: right; font-weight: 500;">{formatted_tot_hpp}</td>
         </tr>
@@ -2967,8 +2920,8 @@ def ubah_transaksi_penjualan_detail(nomor):
         opt_brg_html = '<option value="">-- Pilih Barang --</option>'
         for b in list_barang:
             b_str = f"{b.get('kode')} - {b.get('nama')}"
-            sel = "selected" if b_str == brg_str else ""
-            opt_brg_html += f'<option value="{b_str}" data-harga="{b.get("harga_jual", 0)}" data-hpp="{b.get("harga_pokok", 0)}" {sel}>{b.get("kode")} {b.get("nama")} (Stok: {b.get("qty_awal", 0)})</option>'
+            sel = "selected" if b_str == det.get('barang') else ""
+            opt_brg_html += f'<option value="{b_str}" data-harga="{b.get("harga_jual", 0)}" data-hpp="{b.get("harga_pokok", 0)}" {sel}>{b.get("kode")} {b.get("nama")}</option>'
 
         rows_item_html += f"""
         <tr>
@@ -2979,35 +2932,21 @@ def ubah_transaksi_penjualan_detail(nomor):
                 </select>
             </td>
             <td><input type="text" name="item_qty[]" value="{q_val}" oninput="hitungBaris(this)" style="border:none; width:100%; background:transparent; text-align:left;"></td>
-            <td><input type="text" name="item_harga[]" value="{h_val}" oninput="formatRupiahInput(this); hitungBaris(this);" style="border:none; width:100%; background:transparent; text-align:right;"></td>
+            <td><input type="text" name="item_harga[]" value="{h_val}" oninput="hitungBaris(this)" style="border:none; width:100%; background:transparent; text-align:right;"></td>
             <td style="text-align: right;" class="col-jumlah">{j_val}</td>
             <td style="text-align: center;"><a href="#" onclick="hapusBaris(this); return false;" style="color: #dc2626; text-decoration: none;">✕</a></td>
         </tr>
         """
 
     total_trx_str = target_trx.get('total', '0')
-    subtotal_val = float(str(target_trx.get('subtotal', 0)).replace('.', '') or 0)
-    formatted_subtotal = f"{subtotal_val:,.0f}".replace(',', '.') if subtotal_val > 0 else total_trx_str
-    
+    subtotal_str = total_trx_str
     formatted_total_hpp_trx = f"{total_hpp_trx:,.0f}".replace(',', '.') if total_hpp_trx > 0 else '0'
-
     ppn_persen_val = target_trx.get('ppn_persen', 0)
-    ppn_persen_str = f"{int(ppn_persen_val)}" if float(ppn_persen_val).is_integer() else f"{ppn_persen_val}"
-    if ppn_persen_val == 0:
-        ppn_persen_str = "-"
-
-    beban_angkut_checked = "checked" if target_trx.get('beban_angkut', False) else ""
-    beban_angkut_display = "block" if target_trx.get('beban_angkut', False) else "none"
-    beban_angkut_val = f"{int(str(target_trx.get('beban_angkut_nilai', 0)).replace('.', '') or 0):,.0f}".replace(',', '.') if target_trx.get('beban_angkut_nilai') else ""
+    ppn_persen_str = f"{int(ppn_persen_val)}" if float(ppn_persen_val).is_integer() else (f"{ppn_persen_val}" if ppn_persen_val else "-")
 
     diskon_nilai_val = target_trx.get('diskon_nilai', 0)
-    diskon_input_val = f"{int(float(str(diskon_nilai_val).replace('.', '') or 0))}" if diskon_nilai_val and float(str(diskon_nilai_val).replace('.', '') or 0) > 0 else "-"
-    diskon_display_str = f"- {int(float(str(diskon_nilai_val).replace('.', '') or 0)):,.0f}".replace(',', '.') if diskon_nilai_val and float(str(diskon_nilai_val).replace('.', '') or 0) > 0 else "-"
-
+    diskon_display_str = f"(Rp {int(diskon_nilai_val):,.0f})".replace(',', '.') if diskon_nilai_val and float(diskon_nilai_val) > 0 else "-"
     is_saldo_awal = target_trx.get('is_saldo_awal', False)
-
-    ppn_nominal_val = float(str(target_trx.get('ppn', 0)).replace('.', '') or 0)
-    formatted_ppn_nominal = f"{ppn_nominal_val:,.0f}".replace(',', '.') if ppn_nominal_val > 0 else '0'
 
     bottom_journals_html = ""
     if not is_saldo_awal:
@@ -3033,16 +2972,10 @@ def ubah_transaksi_penjualan_detail(nomor):
                                 <td style="text-align: right;"></td>
                             </tr>
                             <tr>
-                                <td>2-1200</td>
-                                <td>PPN Keluaran</td>
-                                <td style="text-align: right;"></td>
-                                <td style="text-align: right;">{formatted_ppn_nominal}</td>
-                            </tr>
-                            <tr>
                                 <td>4-1100</td>
                                 <td>Penjualan</td>
                                 <td style="text-align: right;"></td>
-                                <td style="text-align: right;">{formatted_subtotal}</td>
+                                <td style="text-align: right;">{total_trx_str}</td>
                             </tr>
                             <tr style="background-color: #f9fafb; font-weight: 600;">
                                 <td colspan="2">Total</td>
@@ -3091,7 +3024,7 @@ def ubah_transaksi_penjualan_detail(nomor):
                 <div class="account-card" style="margin-bottom: 25px;">
                     <div style="padding: 15px 20px; font-weight: 600; font-size: 14px; color: #1f2937; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center;">
                         <span>Retur penjualan</span>
-                        <a href="#" class="btn-action" style="padding: 4px 10px; font-size: 12px;">+ Buat retur</a>
+                        <a href="/transaksi/retur-penjualan/baru" class="btn-action" style="padding: 4px 10px; font-size: 12px;">+ Buat retur</a>
                     </div>
                     <div style="padding: 30px; text-align: center; color: #6b7280; font-size: 13px;">
                         Belum ada retur.
@@ -3099,7 +3032,7 @@ def ubah_transaksi_penjualan_detail(nomor):
                 </div>
 
                 <div class="account-card" style="margin-bottom: 25px;">
-                    <div style="padding: 15px 20px; font-weight: 600; font-size: 14px; color: #1f2937; border-bottom: 1px solid #e5e7eb;">HPP per baris (Harga Pokok x Qty)</div>
+                    <div style="padding: 15px 20px; font-weight: 600; font-size: 14px; color: #1f2937; border-bottom: 1px solid #e5e7eb;">HPP per baris (rata-rata bergerak)</div>
                     <table class="account-table">
                         <thead>
                             <tr>
@@ -3114,20 +3047,13 @@ def ubah_transaksi_penjualan_detail(nomor):
                         </tbody>
                     </table>
                 </div>
-
-                <div class="account-card">
-                    <div style="padding: 15px 20px; font-weight: 600; font-size: 14px; color: #1f2937; border-bottom: 1px solid #e5e7eb;">Riwayat pelunasan</div>
-                    <div style="padding: 30px; text-align: center; color: #6b7280; font-size: 13px;">
-                        Belum ada pelunasan.
-                    </div>
-                </div>
             </div>
         </div>
         """
     else:
         bottom_journals_html = f"""
         <div class="account-card" style="padding: 30px; text-align: center; color: #6b7280; font-size: 13px;">
-            Transaksi ini bersumber dari <strong>Saldo Awal Pelanggan (Kartu Pelanggan)</strong>. Sesuai ketentuan, pengisian saldo awal piutang pelanggan tidak menggunakan jurnal bawah penjualan, melainkan tercatat melalui menu Setup &gt; Saldo Awal.
+            Transaksi ini bersumber dari <strong>Saldo Awal Pelanggan (Kartu Pelanggan)</strong>.
         </div>
         """
 
@@ -3151,7 +3077,6 @@ def ubah_transaksi_penjualan_detail(nomor):
 
     <div class="card-form" style="margin-bottom: 25px;">
         <form action="/transaksi/penjualan/baru" method="POST" id="formPenjualan">
-            
             <div style="display: grid; grid-template-columns: 1fr 2fr 1.5fr; gap: 20px;" class="form-group">
                 <div>
                     <label>Tanggal <span class="required">*</span></label>
@@ -3159,15 +3084,11 @@ def ubah_transaksi_penjualan_detail(nomor):
                 </div>
                 <div>
                     <label>Pelanggan (kode / nama) <span class="required">*</span></label>
-                    <select name="pelanggan" required>
-                        {options_pelanggan}
-                    </select>
-                    <div class="form-helper">Termin aktif sesuai data pelanggan</div>
+                    <select name="pelanggan" required>{options_pelanggan}</select>
                 </div>
                 <div>
                     <label>No. faktur</label>
                     <input type="text" name="no_faktur" value="{target_trx.get('nomor')}">
-                    <div class="form-helper">Nomor faktur transaksi</div>
                 </div>
             </div>
 
@@ -3182,11 +3103,10 @@ def ubah_transaksi_penjualan_detail(nomor):
                 <div>
                     <label>Termin</label>
                     <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
-                        <input type="text" name="termin_pot" value="" placeholder="-" style="text-align: center;">
-                        <input type="text" name="termin_hari" value="" placeholder="-" style="text-align: center;">
-                        <input type="text" name="termin_jt" value="30" style="text-align: center;">
+                        <input type="text" name="termin_pot" value="{target_trx.get('termin_pot', '')}" placeholder="-" style="text-align: center;">
+                        <input type="text" name="termin_hari" value="{target_trx.get('termin_hari', '')}" placeholder="-" style="text-align: center;">
+                        <input type="text" name="termin_jt" value="{target_trx.get('termin_jt', '30')}" style="text-align: center;">
                     </div>
-                    <div class="form-helper">Jatuh tempo: <strong>{target_trx.get('jatuh_tempo')}</strong></div>
                 </div>
                 <div>
                     <label>Memo</label>
@@ -3206,56 +3126,28 @@ def ubah_transaksi_penjualan_detail(nomor):
                             <th style="width: 5%; text-align: center;"></th>
                         </tr>
                     </thead>
-                    <tbody id="tbodyItem">
-                        {rows_item_html}
-                    </tbody>
+                    <tbody id="tbodyItem">{rows_item_html}</tbody>
                 </table>
-                <div style="padding: 10px 20px; background: #f9fafb; display: flex; justify-content: space-between; align-items: center;">
-                    <button type="button" onclick="tambahBaris()" style="background: none; border: none; color: #d18a99; font-weight: 600; cursor: pointer; font-size: 13px;">+ Tambah baris</button>
-                    <div style="font-size: 11px; color: #6b7280;">Enter/↓ bawah · ↑ atas · Tab kanan · Esc batal</div>
-                </div>
             </div>
 
             <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px; margin-bottom: 25px; font-size: 13px;">
                 <div style="display: flex; width: 420px; justify-content: space-between; padding: 4px 0;">
-                    <span style="color: #6b7280;">Subtotal (Penjualan)</span>
-                    <span id="displaySubtotal" style="font-weight: 600; min-width: 120px; text-align: right;">{formatted_subtotal}</span>
+                    <span style="color: #6b7280;">Subtotal</span>
+                    <span id="displaySubtotal" style="font-weight: 600; min-width: 120px; text-align: right;">{subtotal_str}</span>
                 </div>
                 <div style="display: flex; width: 420px; justify-content: space-between; align-items: center; padding: 4px 0;">
                     <span style="color: #6b7280;">Diskon dagang / rabat</span>
-                    <div style="display: flex; gap: 5px; align-items: center;">
-                        <select name="diskon_jenis" onchange="hitungTotalSemua()" style="padding: 4px; font-size: 12px; width: 55px;">
-                            <option value="Rp" {"selected" if target_trx.get('diskon_jenis') == 'Rp' else ""}>Rp</option>
-                            <option value="%" {"selected" if target_trx.get('diskon_jenis') == '%' else ""}>%</option>
-                        </select>
-                        <input type="text" name="diskon_nilai" value="{diskon_input_val}" placeholder="-" onfocus="if(this.value==='-') this.value='';" onblur="if(this.value==='') this.value='-';" oninput="hitungTotalSemua()" style="padding: 4px; text-align: right; font-size: 12px; width: 95px;">
-                        <span id="displayDiskonNominal" style="min-width: 100px; text-align: right; font-weight: 500; color: #374151;">{diskon_display_str}</span>
-                    </div>
+                    <span id="displayDiskonNominal">{diskon_display_str}</span>
                 </div>
-
-                <div style="display: flex; flex-direction: column; width: 420px; padding: 4px 0;">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 0; color: #6b7280; font-weight: normal; cursor: pointer;">
-                            <input type="checkbox" name="beban_angkut" id="checkboxBebanAngkut" {beban_angkut_checked} onclick="toggleBebanAngkutPanel()" style="width: 14px; height: 14px; accent-color: #d18a99;"> Beban Angkut
-                        </label>
-                        <span id="displayBebanAngkutNominal" style="min-width: 120px; text-align: right; font-weight: 500; color: #374151;">{beban_angkut_val if target_trx.get('beban_angkut', False) else '-'}</span>
-                    </div>
-                    <div id="panelBebanAngkut" style="display: {beban_angkut_display}; background: #f9fafb; padding: 8px; border-radius: 6px; border: 1px solid #e5e7eb; margin-top: 6px; width: 180px; align-self: flex-end;">
-                        <label style="font-size: 11px; margin-bottom: 2px;">Nilai (Rp)</label>
-                        <input type="text" name="beban_angkut_nilai" id="inputBebanAngkutNilai" value="{beban_angkut_val}" placeholder="-" oninput="formatRupiah(this); hitungTotalSemua();" style="padding: 4px 6px; font-size: 12px;">
-                    </div>
-                </div>
-
                 <div style="display: flex; width: 420px; justify-content: space-between; align-items: center; padding: 4px 0;">
                     <span style="color: #6b7280;">PPN Keluaran</span>
                     <div style="display: flex; gap: 5px; align-items: center;">
-                        <input type="text" name="ppn_persen" value="{ppn_persen_str}" placeholder="-" onfocus="if(this.value==='-') this.value='';" onblur="if(this.value==='') this.value='-';" oninput="hitungTotalSemua()" style="width: 65px; padding: 4px; text-align: right; font-size: 12px;">
-                        <span style="margin-right: 15px;">%</span>
-                        <span id="displayPpnNominal" style="min-width: 100px; text-align: right; font-weight: 500; color: #374151;">{formatted_ppn_nominal}</span>
+                        <input type="text" name="ppn_persen" value="{ppn_persen_str}" onfocus="if(this.value==='-') this.value='';" onblur="if(this.value==='') this.value='-';" style="width: 65px; padding: 4px; text-align: right; font-size: 12px;">
+                        <span>%</span>
                     </div>
                 </div>
                 <div style="display: flex; width: 420px; justify-content: space-between; border-top: 2px solid #e5e7eb; padding-top: 10px; font-size: 15px; font-weight: bold; color: #1f2937;">
-                    <span>Total (Piutang Usaha)</span>
+                    <span>Total</span>
                     <span id="displayTotal" style="min-width: 120px; text-align: right;">{total_trx_str}</span>
                 </div>
             </div>
@@ -3264,26 +3156,1799 @@ def ubah_transaksi_penjualan_detail(nomor):
                 <button type="button" class="btn-action btn-action-danger" style="padding: 10px 20px; font-weight: 500;">Hapus transaksi</button>
                 <button type="submit" class="btn-simpan" style="background-color: #d18a99; padding: 10px 28px;">Simpan perubahan</button>
             </div>
-
         </form>
     </div>
 
     {bottom_journals_html}
+    """
+    return render_dashboard_layout('penjualan', content)
+
+# --- RETUR PENJUALAN ROUTES ---
+@app.route('/transaksi/retur-penjualan')
+def retur_penjualan():
+    if 'user_email' not in session:
+        return redirect(url_for('login'))
+    
+    email = session['user_email']
+    user_data = database_user.get(email, {})
+    list_retur = user_data.get('retur_penjualan', [])
+
+    if not list_retur:
+        table_retur_html = """
+        <div style="padding: 40px 20px; text-align: center; color: #6b7280; font-size: 13px;">
+            Tidak ada retur pada periode ini.
+        </div>
+        """
+        table_jurnal_retur_html = """
+        <div style="padding: 40px 20px; text-align: center; color: #6b7280; font-size: 13px;">
+            Belum ada jurnal pada periode ini.
+        </div>
+        """
+    else:
+        rows_r = ""
+        rows_jr = ""
+        tot_retur_nilai = 0
+        sum_retur_akun = 0
+        sum_ppn_kel = 0
+        sum_piutang = 0
+        sum_persediaan = 0
+        sum_hpp = 0
+
+        for rt in list_retur:
+            tot_val = float(rt.get('total_retur', 0) or 0)
+            tot_retur_nilai += tot_val
+            sub_retur = float(rt.get('subtotal_retur', 0) or 0)
+            ppn_kor = float(rt.get('ppn_koreksi', 0) or 0)
+            tot_hpp_retur = float(rt.get('total_hpp_retur', 0) or 0)
+
+            sum_retur_akun += sub_retur
+            sum_ppn_kel += ppn_kor
+            sum_piutang += tot_val
+            sum_persediaan += tot_hpp_retur
+            sum_hpp += tot_hpp_retur
+
+            detail_url = f"/transaksi/retur-penjualan/ubah/{rt.get('no_retur')}"
+            formatted_tot_val = f"{int(tot_val):,.0f}".replace(',', '.')
+
+            rows_r += f"""
+            <tr>
+                <td style="padding: 12px 20px;">{rt.get('tanggal_retur')}</td>
+                <td style="padding: 12px 20px;"><a href="{detail_url}" style="color: #d18a99; font-weight: 600; text-decoration: none;">{rt.get('no_retur')}</a></td>
+                <td style="padding: 12px 20px;">{rt.get('pelanggan_nama')}</td>
+                <td style="padding: 12px 20px;"><a href="/transaksi/penjualan/ubah/{rt.get('faktur_asal')}" style="color: #d18a99; font-weight: 600; text-decoration: none;">{rt.get('faktur_asal')}</a></td>
+                <td style="padding: 12px 20px;"><span class="badge-belum-lunas">Kurangi piutang</span></td>
+                <td style="padding: 12px 20px; text-align: right;">{formatted_tot_val}</td>
+            </tr>
+            """
+
+            formatted_sub = f"{int(sub_retur):,.0f}".replace(',', '.') if sub_retur > 0 else '-'
+            formatted_ppn = f"{int(ppn_kor):,.0f}".replace(',', '.') if ppn_kor > 0 else '-'
+            formatted_tot = f"{int(tot_val):,.0f}".replace(',', '.') if tot_val > 0 else '-'
+            formatted_hpp = f"{int(tot_hpp_retur):,.0f}".replace(',', '.') if tot_hpp_retur > 0 else '-'
+
+            rows_jr += f"""
+            <tr>
+                <td style="padding: 12px 20px; white-space: nowrap;">{rt.get('tanggal_retur')}</td>
+                <td style="padding: 12px 20px;"><a href="{detail_url}" style="color: #d18a99; font-weight: 600; text-decoration: none;">{rt.get('no_retur')}</a></td>
+                <td style="padding: 12px 20px;">Retur penjualan - {rt.get('pelanggan_nama')}</td>
+                <td style="padding: 12px 20px; text-align: right;">{formatted_hpp}</td>
+                <td style="padding: 12px 20px; text-align: right;">{formatted_ppn}</td>
+                <td style="padding: 12px 20px; text-align: right;">{formatted_sub}</td>
+                <td style="padding: 12px 20px; text-align: right;">{formatted_tot}</td>
+                <td style="padding: 12px 20px; text-align: right;">{formatted_hpp}</td>
+            </tr>
+            """
+
+        table_retur_html = f"""
+        <table class="account-table">
+            <thead>
+                <tr>
+                    <th style="width: 15%;">TANGGAL</th>
+                    <th style="width: 15%;">NO. RETUR</th>
+                    <th style="width: 25%;">PELANGGAN</th>
+                    <th style="width: 15%;">FAKTUR ASAL</th>
+                    <th style="width: 15%;">PENYELESAIAN</th>
+                    <th style="width: 15%; text-align: right;">TOTAL</th>
+                </tr>
+            </thead>
+            <tbody>
+                {rows_r}
+                <tr style="background-color: #f9fafb; font-weight: 600;">
+                    <td colspan="5" style="padding: 12px 20px;">Total ({len(list_retur)} retur)</td>
+                    <td style="padding: 12px 20px; text-align: right;">{f"{int(tot_retur_nilai):,.0f}".replace(',', '.')}</td>
+                </tr>
+            </tbody>
+        </table>
+        """
+
+        table_jurnal_retur_html = f"""
+        <div style="overflow-x: auto;">
+        <table class="account-table" style="min-width: 950px;">
+            <thead>
+                <tr>
+                    <th rowspan="2" style="width: 12%; vertical-align: middle;">TANGGAL</th>
+                    <th rowspan="2" style="width: 15%; vertical-align: middle;">NO. BUKTI</th>
+                    <th rowspan="2" style="width: 23%; vertical-align: middle;">KETERANGAN</th>
+                    <th style="width: 10%; text-align: right; background: #f3f4f6;">Persediaan Barang Dagang</th>
+                    <th style="width: 10%; text-align: right; background: #f3f4f6;">PPN Keluaran</th>
+                    <th style="width: 10%; text-align: right; background: #f3f4f6;">Retur Penjualan</th>
+                    <th style="width: 10%; text-align: right; background: #f3f4f6;">Piutang Usaha</th>
+                    <th style="width: 10%; text-align: right; background: #f3f4f6;">Harga Pokok Penjualan</th>
+                </tr>
+                <tr>
+                    <th style="text-align: right; font-size: 10px; color: #047857;">DEBIT</th>
+                    <th style="text-align: right; font-size: 10px; color: #047857;">DEBIT</th>
+                    <th style="text-align: right; font-size: 10px; color: #047857;">DEBIT</th>
+                    <th style="text-align: right; font-size: 10px; color: #1d4ed8;">KREDIT</th>
+                    <th style="text-align: right; font-size: 10px; color: #1d4ed8;">KREDIT</th>
+                </tr>
+            </thead>
+            <tbody>
+                {rows_jr}
+                <tr style="background-color: #f9fafb; font-weight: 600;">
+                    <td colspan="3" style="padding: 12px 20px;">Total ({len(list_retur)} bukti)</td>
+                    <td style="padding: 12px 20px; text-align: right;">{f"{int(sum_persediaan):,.0f}".replace(',', '.')}</td>
+                    <td style="padding: 12px 20px; text-align: right;">{f"{int(sum_ppn_kel):,.0f}".replace(',', '.')}</td>
+                    <td style="padding: 12px 20px; text-align: right;">{f"{int(sum_retur_akun):,.0f}".replace(',', '.')}</td>
+                    <td style="padding: 12px 20px; text-align: right;">{f"{int(sum_piutang):,.0f}".replace(',', '.')}</td>
+                    <td style="padding: 12px 20px; text-align: right;">{f"{int(sum_hpp):,.0f}".replace(',', '.')}</td>
+                </tr>
+            </tbody>
+        </table>
+        </div>
+        """
+
+    content = f"""
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
+        <div>
+            <div class="page-title">Retur Penjualan</div>
+            <div class="page-desc" style="margin-bottom: 0;">Barang dikembalikan pelanggan: penjualan dikoreksi lewat akun Retur Penjualan, barang kembali ke persediaan sebesar HPP-nya.</div>
+        </div>
+        <div>
+            <a href="/transaksi/retur-penjualan/baru" style="background-color: #d18a99; color: white; padding: 10px 18px; border-radius: 6px; font-size: 14px; font-weight: 500; text-decoration: none; display: inline-block;">+ Tambah Retur</a>
+        </div>
+    </div>
+
+    <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 15px 20px; margin-bottom: 25px; display: flex; align-items: center; gap: 15px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <input type="date" value="2026-01-01" style="padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+            <span style="font-size: 13px; color: #6b7280;">s.d.</span>
+            <input type="date" value="2026-10-31" style="padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+        </div>
+    </div>
+
+    <div class="account-card" style="margin-bottom: 25px;">{table_retur_html}</div>
+    <div class="account-card">
+        <div style="padding: 15px 20px; font-weight: 600; font-size: 15px; color: #1f2937; border-bottom: 1px solid #e5e7eb;">Jurnal Retur Penjualan</div>
+        {table_jurnal_retur_html}
+    </div>
+    """
+    return render_dashboard_layout('retur_penjualan', content)
+
+@app.route('/transaksi/retur-penjualan/baru', methods=['GET', 'POST'])
+def tambah_retur_penjualan():
+    if 'user_email' not in session:
+        return redirect(url_for('login'))
+    
+    email = session['user_email']
+    user_data = database_user.get(email, {})
+    list_pelanggan = user_data.get('pelanggan', [])
+    list_penjualan = user_data.get('penjualan', [])
+    
+    if request.method == 'POST':
+        tanggal_retur = request.form.get('tanggal_retur')
+        pelanggan_nama = request.form.get('pelanggan_nama')
+        faktur_asal = request.form.get('faktur_asal')
+        no_retur = request.form.get('no_retur').strip()
+        if not no_retur:
+            no_retur = f"RJ-{len(user_data.get('retur_penjualan', [])) + 1:02d}"
+        
+        penyelesaian = request.form.get('penyelesaian')
+        memo = request.form.get('memo', '')
+        
+        qty_retur_list = request.form.getlist('qty_retur[]')
+        ppn_retur_persen_raw = request.form.get('ppn_retur_persen', '11')
+        ppn_retur_persen = float(ppn_retur_persen_raw) if ppn_retur_persen_raw != '' and ppn_retur_persen_raw != '-' else 0.0
+
+        target_trx = None
+        for tr in list_penjualan:
+            if tr.get('nomor') == faktur_asal:
+                target_trx = tr
+                break
+
+        subtotal_retur = 0
+        total_hpp_retur = 0
+        retur_details = []
+
+        if target_trx and 'details' in target_trx:
+            for idx, det in enumerate(target_trx['details']):
+                q_ret = float(qty_retur_list[idx].replace('.', '') or 0) if idx < len(qty_retur_list) else 0
+                if q_ret > 0:
+                    harga_jual = float(det.get('harga', 0) or 0)
+                    hpp_u = float(det.get('hpp_unit', 0) or 0)
+                    subtotal_retur += (q_ret * harga_jual)
+                    total_hpp_retur += (q_ret * hpp_u)
+                    retur_details.append({
+                        'barang': det.get('barang'),
+                        'qty_retur': q_ret,
+                        'harga': harga_jual,
+                        'jumlah': q_ret * harga_jual,
+                        'hpp_unit': hpp_u,
+                        'total_hpp': q_ret * hpp_u
+                    })
+
+        ppn_koreksi = subtotal_retur * (ppn_retur_persen / 100)
+        total_retur = subtotal_retur + ppn_koreksi
+
+        if target_trx:
+            try:
+                sisa_lama = float(str(target_trx.get('sisa', target_trx.get('total'))).replace('.', '') or 0)
+                sisa_baru = max(0, sisa_lama - total_retur)
+                target_trx['sisa'] = f"{int(sisa_baru):,.0f}".replace(',', '.')
+                if sisa_baru == 0:
+                    target_trx['status'] = 'Lunas'
+            except:
+                pass
+
+        retur_obj = {
+            'no_retur': no_retur,
+            'tanggal_retur': tanggal_retur,
+            'pelanggan_nama': pelanggan_nama,
+            'faktur_asal': faktur_asal,
+            'penyelesaian': penyelesaian,
+            'memo': memo,
+            'ppn_retur_persen': ppn_retur_persen,
+            'subtotal_retur': subtotal_retur,
+            'ppn_koreksi': ppn_koreksi,
+            'total_retur': total_retur,
+            'total_hpp_retur': total_hpp_retur,
+            'details': retur_details
+        }
+
+        database_user[email]['retur_penjualan'].append(retur_obj)
+        return redirect(url_for('ubah_retur_penjualan_detail', no_retur=no_retur))
+
+    today_date = datetime.now().strftime('%Y-%m-%d')
+    today_indo = format_tanggal_pendek_indo(today_date)
+
+    options_pelanggan = '<option value="">-- Pilih Pelanggan --</option>'
+    for p in list_pelanggan:
+        p_nama = p.get('nama')
+        options_pelanggan += f'<option value="{p_nama}">{p.get("kode")} — {p_nama}</option>'
+
+    options_faktur = '<option value="">Pilih pelanggan dulu</option>'
+    for tr in list_penjualan:
+        if not tr.get('is_saldo_awal', False):
+            options_faktur += f'<option value="{tr.get("nomor")}" data-pelanggan="{tr.get("pelanggan")}">{tr.get("nomor")} ({tr.get("tanggal_indo", tr.get("tanggal"))}) - Rp {tr.get("total")}</option>'
+
+    content = f"""
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
+        <div>
+            <div class="page-title">Tambah Retur Penjualan</div>
+            <div class="page-desc" style="margin-bottom: 0;">Pilih faktur asal, lalu isi qty barang yang dikembalikan. Nomor dibuat otomatis (RJ-...) bila dikosongkan.</div>
+        </div>
+        <div>
+            <a href="/transaksi/retur-penjualan" class="btn-action" style="padding: 8px 16px; font-weight: 500;">← Daftar</a>
+        </div>
+    </div>
+
+    <div class="card-form" style="margin-bottom: 25px;">
+        <form action="/transaksi/retur-penjualan/baru" method="POST" id="formRetur">
+            <div style="display: grid; grid-template-columns: 1fr 1.5fr 1.5fr 1.2fr; gap: 20px;" class="form-group">
+                <div>
+                    <label>Tanggal retur <span class="required">*</span></label>
+                    <input type="text" name="tanggal_retur" value="{today_indo}" required>
+                </div>
+                <div>
+                    <label>Pelanggan (kode / nama) <span class="required">*</span></label>
+                    <select name="pelanggan_nama" id="selectPelanggan" onchange="filterFaktur(); cekPelangganDipilih();" required>
+                        {options_pelanggan}
+                    </select>
+                </div>
+                <div>
+                    <label>Faktur asal <span class="required">*</span></label>
+                    <select name="faktur_asal" id="selectFaktur" onchange="muatBarangFaktur(this)" disabled required style="background-color: #f3f4f6; cursor: not-allowed;">
+                        {options_faktur}
+                    </select>
+                </div>
+                <div>
+                    <label>No. retur</label>
+                    <input type="text" name="no_retur" placeholder="RJ-otomatis">
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 20px;" class="form-group">
+                <div>
+                    <label>Penyelesaian</label>
+                    <select name="penyelesaian">
+                        <option value="Kurangi piutang pelanggan">Kurangi piutang pelanggan</option>
+                        <option value="Kembalikan kas/bank">Kembalikan kas/bank</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Memo</label>
+                    <input type="text" name="memo" placeholder="Alasan retur (opsional)">
+                </div>
+            </div>
+
+            <div class="account-card" style="margin-top: 25px;">
+                <div style="padding: 15px 20px; font-weight: 600; font-size: 14px; color: #1f2937; border-bottom: 1px solid #e5e7eb;">Barang yang diretur</div>
+                <div id="containerBarangRetur" style="padding: 60px 20px; text-align: center; color: #6b7280; font-size: 13px;">
+                    Pilih pelanggan dan faktur penjualan terlebih dahulu.
+                </div>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; align-items: center; border-top: 1px solid #e5e7eb; padding-top: 20px; margin-top: 30px;">
+                <button type="submit" class="btn-simpan" style="background-color: #d18a99; padding: 10px 28px;">Simpan retur</button>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        const daftarPenjualan = {json.dumps(list_penjualan)};
+
+        function cekPelangganDipilih() {{
+            const val = document.getElementById('selectPelanggan').value.trim();
+            const selectFaktur = document.getElementById('selectFaktur');
+            if(val !== '') {{
+                selectFaktur.removeAttribute('disabled');
+                selectFaktur.style.backgroundColor = '#fff';
+                selectFaktur.style.cursor = 'pointer';
+            }} else {{
+                selectFaktur.setAttribute('disabled', 'true');
+                selectFaktur.style.backgroundColor = '#f3f4f6';
+                selectFaktur.style.cursor = 'not-allowed';
+                selectFaktur.value = '';
+                document.getElementById('containerBarangRetur').innerHTML = 'Pilih pelanggan dan faktur penjualan terlebih dahulu.';
+            }}
+        }}
+
+        function filterFaktur() {{
+            const selectPelangganEl = document.getElementById('selectPelanggan');
+            const namaPelangganMurni = selectPelangganEl.value.toLowerCase();
+            const select = document.getElementById('selectFaktur');
+            select.innerHTML = '<option value="">-- Pilih Faktur --</option>';
+            
+            daftarPenjualan.forEach(tr => {{
+                if(tr.is_saldo_awal) return;
+                if(tr.pelanggan.toLowerCase() === namaPelangganMurni) {{
+                    let opt = document.createElement('option');
+                    opt.value = tr.nomor;
+                    opt.textContent = tr.nomor + ' (' + tr.tanggal_indo + ') - Rp ' + tr.total;
+                    select.appendChild(opt);
+                }}
+            }});
+        }}
+
+        function muatBarangFaktur(selectEl) {{
+            const noFaktur = selectEl.value;
+            const container = document.getElementById('containerBarangRetur');
+            if(!noFaktur) {{
+                container.innerHTML = 'Pilih faktur penjualan untuk menampilkan barangnya.';
+                return;
+            }}
+
+            const trx = daftarPenjualan.find(t => t.nomor === noFaktur);
+            if(!trx || !trx.details || trx.details.length === 0) {{
+                container.innerHTML = 'Tidak ada rincian barang pada faktur ini.';
+                return;
+            }}
+
+            let rowsHtml = '';
+            trx.details.forEach((det, idx) => {{
+                rowsHtml += `
+                <tr>
+                    <td>${{idx + 1}}</td>
+                    <td><strong>${{det.barang}}</strong></td>
+                    <td style="text-align: center;">${{det.qty}}</td>
+                    <td><input type="text" name="qty_retur[]" value="" data-harga="${{det.harga}}" oninput="hitungJumlahRetur(this)" style="width: 80px; padding: 4px; text-align: center;"></td>
+                    <td style="text-align: right;">Rp ${{det.harga.toLocaleString('id-ID')}}</td>
+                    <td style="text-align: right;" class="col-jumlah-retur">-</td>
+                </tr>
+                `;
+            }});
+
+            container.style.padding = '0';
+            container.innerHTML = `
+            <table class="account-table">
+                <thead>
+                    <tr>
+                        <th style="width: 5%;">#</th>
+                        <th style="width: 35%;">Barang</th>
+                        <th style="width: 12%; text-align: center;">Qty Jual</th>
+                        <th style="width: 15%; text-align: center;">Qty Retur</th>
+                        <th style="width: 16%; text-align: right;">Harga Jual</th>
+                        <th style="width: 17%; text-align: right;">Jumlah</th>
+                    </tr>
+                </thead>
+                <tbody>${{rowsHtml}}</tbody>
+            </table>
+            <div style="padding: 15px 20px; background: #f9fafb; border-top: 1px solid #e5e7eb; display: flex; flex-direction: column; align-items: flex-end; gap: 8px;">
+                <div style="display: flex; width: 350px; justify-content: space-between; align-items: center; font-size: 13px;">
+                    <span style="font-weight: 600; color: #374151;">PPN Keluaran yang dikoreksi</span>
+                    <div style="display: flex; gap: 5px; align-items: center;">
+                        <input type="text" name="ppn_retur_persen" id="inputPpnReturPersen" value="-" onfocus="if(this.value==='-') this.value='';" onblur="if(this.value==='') this.value='-';" oninput="hitungJumlahRetur()" style="width: 60px; padding: 4px; text-align: right; font-size: 12px;">
+                        <span>%</span>
+                        <span id="displayPpnKoreksi" style="font-weight: 600; color: #1f2937; min-width: 90px; text-align: right;">-</span>
+                    </div>
+                </div>
+                <div style="display: flex; width: 350px; justify-content: space-between; align-items: center; font-size: 13px;">
+                    <span style="font-weight: 600; color: #374151;">Total Retur</span>
+                    <span id="displayTotalRetur" style="font-weight: bold; color: #1f2937; min-width: 90px; text-align: right;">-</span>
+                </div>
+            </div>
+            `;
+        }}
+
+        function hitungJumlahRetur(inputEl) {{
+            if (inputEl) {{
+                const row = inputEl.closest('tr');
+                const qtyRetur = parseFloat(inputEl.value.replace(/\./g, '')) || 0;
+                const hargaJual = parseFloat(inputEl.getAttribute('data-harga')) || 0;
+                const totalJumlah = qtyRetur * hargaJual;
+                const colJumlah = row.querySelector('.col-jumlah-retur');
+                colJumlah.textContent = qtyRetur > 0 ? 'Rp ' + totalJumlah.toLocaleString('id-ID') : '-';
+            }}
+
+            let subtotalRetur = 0;
+            document.querySelectorAll('#containerBarangRetur tr').forEach(r => {{
+                const inp = r.querySelector('input[name="qty_retur[]"]');
+                if (inp) {{
+                    const q = parseFloat(inp.value.replace(/\./g, '')) || 0;
+                    const h = parseFloat(inp.getAttribute('data-harga')) || 0;
+                    subtotalRetur += (q * h);
+                }}
+            }});
+
+            const ppnPersenInput = document.getElementById('inputPpnReturPersen');
+            const ppnVal = ppnPersenInput ? ppnPersenInput.value.trim() : '-';
+            const ppnPersen = (ppnVal === '' || ppnVal === '-') ? 0 : (parseFloat(ppnVal.replace(/\./g, '')) || 0);
+            
+            const ppnKoreksi = subtotalRetur * (ppnPersen / 100);
+            const totalRetur = subtotalRetur + ppnKoreksi;
+            
+            const elPpn = document.getElementById('displayPpnKoreksi');
+            const elTotal = document.getElementById('displayTotalRetur');
+            
+            if (subtotalRetur > 0) {{
+                elPpn.textContent = ppnKoreksi > 0 ? 'Rp ' + Math.round(ppnKoreksi).toLocaleString('id-ID') : '-';
+                elTotal.textContent = 'Rp ' + Math.round(totalRetur).toLocaleString('id-ID');
+            }} else {{
+                elPpn.textContent = '-';
+                elTotal.textContent = '-';
+            }}
+        }}
+    </script>
+    """
+    return render_dashboard_layout('retur_penjualan', content)
+
+@app.route('/transaksi/retur-penjualan/ubah/<path:no_retur>')
+def ubah_retur_penjualan_detail(no_retur):
+    if 'user_email' not in session:
+        return redirect(url_for('login'))
+    
+    email = session['user_email']
+    user_data = database_user.get(email, {})
+    list_retur = user_data.get('retur_penjualan', [])
+    
+    target_retur = None
+    for rt in list_retur:
+        if rt.get('no_retur') == no_retur:
+            target_retur = rt
+            break
+            
+    if not target_retur:
+        return redirect(url_for('retur_penjualan'))
+
+    sub_retur = float(target_retur.get('subtotal_retur', 0) or 0)
+    ppn_kor = float(target_retur.get('ppn_koreksi', 0) or 0)
+    tot_retur = float(target_retur.get('total_retur', 0) or 0)
+    tot_hpp_retur = float(target_retur.get('total_hpp_retur', 0) or 0)
+
+    formatted_sub = f"{int(sub_retur):,.0f}".replace(',', '.') if sub_retur > 0 else '0'
+    formatted_ppn = f"{int(ppn_kor):,.0f}".replace(',', '.') if ppn_kor > 0 else '0'
+    formatted_tot = f"{int(tot_retur):,.0f}".replace(',', '.') if tot_retur > 0 else '0'
+    formatted_hpp = f"{int(tot_hpp_retur):,.0f}".replace(',', '.') if tot_hpp_retur > 0 else '0'
+
+    content = f"""
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
+        <div>
+            <div class="page-title">Retur Penjualan {target_retur.get('no_retur')}</div>
+            <div style="font-size: 13px; color: #6b7280; margin-top: 4px;">
+                Faktur Asal: <strong>{target_retur.get('faktur_asal')}</strong> | Pelanggan: <strong>{target_retur.get('pelanggan_nama')}</strong>
+            </div>
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <a href="/transaksi/retur-penjualan" class="btn-action" style="padding: 8px 16px; font-weight: 500;">← Daftar</a>
+        </div>
+    </div>
+
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
+        <a href="#" class="btn-action btn-action-danger" style="padding: 10px 20px; font-weight: 500;">Hapus retur</a>
+        <button type="button" class="btn-simpan" style="background-color: #d18a99; padding: 10px 28px;">Simpan perubahan</button>
+    </div>
+
+    <div class="account-card" style="margin-bottom: 25px;">
+        <div style="padding: 15px 20px; font-weight: 600; font-size: 14px; color: #1f2937; border-bottom: 1px solid #e5e7eb;">Jurnal retur penjualan</div>
+        <table class="account-table">
+            <thead>
+                <tr>
+                    <th style="width: 15%;">KODE</th>
+                    <th style="width: 45%;">AKUN</th>
+                    <th style="width: 20%; text-align: right;">DEBIT</th>
+                    <th style="width: 20%; text-align: right;">KREDIT</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>4-1200</td>
+                    <td>Retur Penjualan</td>
+                    <td style="text-align: right;">{formatted_sub}</td>
+                    <td style="text-align: right;"></td>
+                </tr>
+                <tr>
+                    <td>2-1200</td>
+                    <td>PPN Keluaran</td>
+                    <td style="text-align: right;">{formatted_ppn}</td>
+                    <td style="text-align: right;"></td>
+                </tr>
+                <tr>
+                    <td>1-1300</td>
+                    <td>Piutang Usaha</td>
+                    <td style="text-align: right;"></td>
+                    <td style="text-align: right;">{formatted_tot}</td>
+                </tr>
+                <tr style="background-color: #f9fafb; font-weight: 600;">
+                    <td colspan="2">Total</td>
+                    <td style="text-align: right;">{formatted_tot}</td>
+                    <td style="text-align: right;">{formatted_tot}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="account-card">
+        <div style="padding: 15px 20px; font-weight: 600; font-size: 14px; color: #1f2937; border-bottom: 1px solid #e5e7eb;">Jurnal HPP (persediaan kembali)</div>
+        <table class="account-table">
+            <thead>
+                <tr>
+                    <th style="width: 15%;">KODE</th>
+                    <th style="width: 45%;">AKUN</th>
+                    <th style="width: 20%; text-align: right;">DEBIT</th>
+                    <th style="width: 20%; text-align: right;">KREDIT</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>1-1400</td>
+                    <td>Persediaan Barang Dagang</td>
+                    <td style="text-align: right;">{formatted_hpp}</td>
+                    <td style="text-align: right;"></td>
+                </tr>
+                <tr>
+                    <td>5-1100</td>
+                    <td>Harga Pokok Penjualan</td>
+                    <td style="text-align: right;"></td>
+                    <td style="text-align: right;">{formatted_hpp}</td>
+                </tr>
+                <tr style="background-color: #f9fafb; font-weight: 600;">
+                    <td colspan="2">Total</td>
+                    <td style="text-align: right;">{formatted_hpp}</td>
+                    <td style="text-align: right;">{formatted_hpp}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    """
+    return render_dashboard_layout('retur_penjualan', content)
+
+# Contoh Dummy Database Pelanggan & Piutang Belum Lunas (Faktur)
+DATABASE_PELANGGAN = [
+    {
+        'kode': 'C001', 
+        'nama': 'PT JAYA', 
+        'piutang': [
+            {'no_faktur': 'INV/2026/1001', 'tanggal': '01/10/2026', 'jatuh_tempo': '15/10/2026', 'total': 5000000, 'sisa': 2500000},
+            {'no_faktur': 'INV/2026/1015', 'tanggal': '10/10/2026', 'jatuh_tempo': '24/10/2026', 'total': 3000000, 'sisa': 3000000}
+        ]
+    },
+    {
+        'kode': 'C002', 
+        'nama': 'CV MAKMUR ABADI', 
+        'piutang': [
+            {'no_faktur': 'INV/2026/1008', 'tanggal': '05/10/2026', 'jatuh_tempo': '20/10/2026', 'total': 4500000, 'sisa': 4500000}
+        ]
+    }
+]
+
+# --- PENERIMAAN KAS ROUTES
+@app.route('/transaksi/penerimaan-kas', methods=['GET', 'POST'])
+def penerimaan_kas():
+    if 'user_email' not in session:
+        return redirect(url_for('login'))
+    
+    email = session['user_email']
+    user_data = database_user.get(email, {})
+    list_pelanggan = user_data.get('pelanggan', [])
+    list_akun = user_data.get('akun', DEFAULT_AKUN)
+    list_penjualan = user_data.get('penjualan', [])
+    list_penerimaan = user_data.get('penerimaan_kas', [])
+
+    active_tab = request.args.get('tab', 'pelunasan') # 'pelunasan' atau 'lain'
+
+    if request.method == 'POST':
+        jenis_transaksi = request.form.get('jenis_transaksi', 'pelunasan')
+        tanggal = request.form.get('tanggal')
+        akun_kas_input = request.form.get('akun_kas')
+        no_bukti = request.form.get('no_bukti', '').strip()
+        memo_utama = request.form.get('memo', '').strip()
+        
+        nama_akun_kas_bersih = akun_kas_input.split(' - ')[1] if ' - ' in akun_kas_input else akun_kas_input
+
+        if jenis_transaksi == 'pelunasan':
+            pelanggan = request.form.get('pelanggan')
+            if not no_bukti:
+                no_bukti = f"BKM-{len(list_penerimaan) + 1:03d}"
+            
+            jumlah_diterima = float(request.form.get('jumlah_diterima', '0').replace('.', '') or 0)
+            potongan = float(request.form.get('potongan', '0').replace('.', '') or 0)
+            
+            faktur_terpilih = request.form.getlist('faktur_terpilih[]')
+            bayar_list = request.form.getlist('bayar_alokasi[]')
+
+            alokasi_faktur = []
+            for idx, fak_no in enumerate(faktur_terpilih):
+                val_bayar = float(bayar_list[idx].replace('.', '') or 0) if idx < len(bayar_list) else 0
+                if val_bayar > 0:
+                    alokasi_faktur.append(fak_no)
+                    for tr in list_penjualan:
+                        if tr.get('nomor') == fak_no:
+                            try:
+                                sisa_lama = float(str(tr.get('sisa', tr.get('total'))).replace('.', '') or 0)
+                                total_hapus = val_bayar + (potongan / len(faktur_terpilih) if potongan > 0 else 0)
+                                sisa_baru = max(0, sisa_lama - total_hapus)
+                                tr['sisa'] = f"{int(sisa_baru):,.0f}".replace(',', '.')
+                                if sisa_baru == 0:
+                                    tr['status'] = 'Lunas'
+                                else:
+                                    tr['status'] = 'Sebagian'
+                            except:
+                                pass
+
+            total_pengaruh_piutang = jumlah_diterima + potongan
+            for acc in list_akun:
+                acc_str = f"{acc.get('kode')} - {acc.get('nama')}"
+                if acc_str == akun_kas_input or acc.get('kode') in akun_kas_input:
+                    try:
+                        saldo_lama = float(str(acc.get('saldo', '0')).replace('.', '') or 0)
+                        acc['saldo'] = f"{int(saldo_lama + jumlah_diterima):,.0f}".replace(',', '.')
+                    except:
+                        pass
+                if 'Piutang Usaha' in acc.get('nama'):
+                    try:
+                        saldo_piutang = float(str(acc.get('saldo', '0')).replace('.', '') or 0)
+                        acc['saldo'] = f"{int(max(0, saldo_piutang - total_pengaruh_piutang)):,.0f}".replace(',', '.')
+                    except:
+                        pass
+
+            keterangan_final = memo_utama if memo_utama else f"Pelunasan piutang - {pelanggan}"
+
+            penerimaan_obj = {
+                'jenis': 'pelunasan',
+                'no_bukti': no_bukti,
+                'tanggal': tanggal,
+                'dari': pelanggan,
+                'akun_kas': nama_akun_kas_bersih,
+                'akun_tabel': 'Piutang Usaha', # Hanya nama akun kredit saja
+                'memo': keterangan_final,
+                'jumlah_pembayaran': jumlah_diterima,
+                'potongan': potongan,
+                'kredit_akun': 'Piutang Usaha',
+                'alokasi': alokasi_faktur
+            }
+            user_data.setdefault('penerimaan_kas', []).append(penerimaan_obj)
+            return redirect(url_for('penerimaan_kas', tab='pelunasan'))
+
+        else:
+            # Penerimaan Lain
+            if not no_bukti:
+                no_bukti = f"BKM-Lain-{len(list_penerimaan) + 1:03d}"
+            
+            diterima_dari = request.form.get('diterima_dari', '-')
+            akun_baris = request.form.getlist('akun_baris[]')
+            jumlah_baris = request.form.getlist('jumlah_baris[]')
+            keterangan_baris = request.form.getlist('keterangan_baris[]')
+
+            total_jumlah_lain = 0
+            detail_item_lain = []
+            akun_kredit_list = []
+
+            for idx, ak in enumerate(akun_baris):
+                if ak and idx < len(jumlah_baris):
+                    val_jml = float(jumlah_baris[idx].replace('.', '') or 0)
+                    if val_jml > 0:
+                        total_jumlah_lain += val_jml
+                        nama_akun_lawan = ak.split(' - ')[1] if ' - ' in ak else ak
+                        akun_kredit_list.append(nama_akun_lawan)
+                        detail_item_lain.append({
+                            'akun': nama_akun_lawan,
+                            'jumlah': val_jml,
+                            'keterangan': keterangan_baris[idx] if idx < len(keterangan_baris) else ''
+                        })
+
+            for acc in list_akun:
+                acc_str = f"{acc.get('kode')} - {acc.get('nama')}"
+                if acc_str == akun_kas_input or acc.get('kode') in akun_kas_input:
+                    try:
+                        saldo_lama = float(str(acc.get('saldo', '0')).replace('.', '') or 0)
+                        acc['saldo'] = f"{int(saldo_lama + total_jumlah_lain):,.0f}".replace(',', '.')
+                    except:
+                        pass
+
+            keterangan_final = memo_utama if memo_utama else f"Penerimaan lain dari {diterima_dari}"
+            str_akun_kredit = ", ".join(akun_kredit_list)
+
+            penerimaan_obj = {
+                'jenis': 'lain',
+                'no_bukti': no_bukti,
+                'tanggal': tanggal,
+                'dari': diterima_dari,
+                'akun_kas': nama_akun_kas_bersih,
+                'akun_tabel': str_akun_kredit, # Hanya nama akun kredit saja
+                'memo': keterangan_final,
+                'jumlah_pembayaran': total_jumlah_lain,
+                'potongan': 0,
+                'kredit_akun': str_akun_kredit,
+                'detail_lain': detail_item_lain
+            }
+            user_data.setdefault('penerimaan_kas', []).append(penerimaan_obj)
+            return redirect(url_for('penerimaan_kas', tab='lain'))
+
+    today_date = datetime.now().strftime('%Y-%m-%d')
+    current_date_formatted = datetime.now().strftime('%d %b %Y')
+
+    # Dropdown Pelanggan
+    options_pelanggan = '<option value="">ketik kode atau nama...</option>'
+    for p in list_pelanggan:
+        p_nama = p.get('nama')
+        options_pelanggan += f'<option value="{p_nama}">{p.get("kode")} — {p_nama}</option>'
+
+    # Dropdown Akun Kas / Bank / Kas Kecil
+    options_akun_kas = ""
+    for acc in list_akun:
+        if acc.get('kategori') == '1 — Aset' and ('Kas' in acc.get('nama') or 'Bank' in acc.get('nama')):
+            selected = 'selected' if '1-1100' in acc.get('kode') else ''
+            options_akun_kas += f'<option value="{acc.get("kode")} - {acc.get("nama")}" {selected}>{acc.get("kode")} — {acc.get("nama")}</option>'
+
+    # Dropdown Semua Akun untuk Penerimaan Lain
+    options_semua_akun = '<option value="">-- Pilih Akun --</option>'
+    for acc in list_akun:
+        options_semua_akun += f'<option value="{acc.get("kode")} - {acc.get("nama")}">{acc.get("kode")} — {acc.get("nama")}</option>'
+
+    # Render Tabel Daftar & Jurnal
+    if not list_penerimaan:
+        table_penerimaan_html = '<div style="padding: 40px 20px; text-align: center; color: #6b7280; font-size: 13px;">Belum ada data pada periode ini.</div>'
+        table_jurnal_html = '<div style="padding: 40px 20px; text-align: center; color: #6b7280; font-size: 13px;">Belum ada jurnal pada periode ini.</div>'
+    else:
+        rows_pk = ""
+        rows_jpk = ""
+        sum_kas_debit = 0
+        sum_pot_debit = 0
+        sum_kredit_total = 0
+
+        for pk in list_penerimaan:
+            val_jumlah = float(pk.get('jumlah_pembayaran', 0) or 0)
+            val_potongan = float(pk.get('potongan', 0) or 0)
+            total_kredit = val_jumlah + val_potongan
+
+            sum_kas_debit += val_jumlah
+            sum_pot_debit += val_potongan
+            sum_kredit_total += total_kredit
+
+            tgl_raw = pk.get('tanggal', '')
+            try:
+                dt_obj = datetime.strptime(tgl_raw, '%Y-%m-%d')
+                months_id = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agt', 'Sep', 'Okt', 'Nov', 'Des']
+                tgl_formatted = f"{dt_obj.day} {months_id[dt_obj.month]} {dt_obj.year}"
+            except:
+                tgl_formatted = tgl_raw
+
+            formatted_jumlah = f"{int(val_jumlah):,.0f}".replace(',', '.')
+            formatted_potongan = f"{int(val_potongan):,.0f}".replace(',', '.') if val_potongan > 0 else '-'
+            formatted_kredit = f"{int(total_kredit):,.0f}".replace(',', '.')
+
+            rows_pk += f"""
+            <tr>
+                <td style="padding: 12px 16px;">{tgl_formatted}</td>
+                <td style="padding: 12px 16px; font-weight: 600; color: #d18a99;">{pk.get('no_bukti')}</td>
+                <td style="padding: 12px 16px;">{pk.get('dari')}</td>
+                <td style="padding: 12px 16px; font-weight: 500; color: #374151;">{pk.get('akun_tabel')}</td>
+                <td style="padding: 12px 16px;">{pk.get('akun_kas')}</td>
+                <td style="padding: 12px 16px; text-align: right; font-weight: 600; color: #047857;">{formatted_jumlah}</td>
+                <td style="padding: 12px 16px; text-align: right;">{formatted_potongan}</td>
+            </tr>
+            """
+
+            rows_jpk += f"""
+            <tr>
+                <td style="padding: 12px 16px;">{tgl_formatted}</td>
+                <td style="padding: 12px 16px; font-weight: 600; color: #d18a99;">{pk.get('no_bukti')}</td>
+                <td style="padding: 12px 16px;">{pk.get('memo')}</td>
+                <td style="padding: 12px 16px; text-align: right;">{formatted_jumlah}</td>
+                <td style="padding: 12px 16px; text-align: right;">{f"{int(val_potongan):,.0f}".replace(',', '.') if val_potongan > 0 else '-'}</td>
+                <td style="padding: 12px 16px; text-align: right; font-weight: 600; color: #b45309;">{pk.get('kredit_akun')}</td>
+                <td style="padding: 12px 16px; text-align: right;">{formatted_kredit}</td>
+            </tr>
+            """
+
+        table_penerimaan_html = f"""
+        <table class="account-table">
+            <thead>
+                <tr>
+                    <th>TANGGAL</th>
+                    <th>NO. BUKTI</th>
+                    <th>DARI</th>
+                    <th>AKUN</th>
+                    <th>AKUN KAS</th>
+                    <th style="text-align: right;">JUMLAH</th>
+                    <th style="text-align: right;">POTONGAN</th>
+                </tr>
+            </thead>
+            <tbody>{rows_pk}</tbody>
+        </table>
+        """
+
+        table_jurnal_html = f"""
+        <div style="overflow-x: auto;">
+        <table class="account-table" style="min-width: 950px;">
+            <thead>
+                <tr>
+                    <th rowspan="2" style="vertical-align: middle;">TANGGAL</th>
+                    <th rowspan="2" style="vertical-align: middle;">NO. BUKTI</th>
+                    <th rowspan="2" style="vertical-align: middle;">KETERANGAN</th>
+                    <th style="text-align: right; background: #f3f4f6;">Kas / Bank</th>
+                    <th style="text-align: right; background: #f3f4f6;">Potongan Penjualan</th>
+                    <th rowspan="2" style="text-align: right; vertical-align: middle; background: #fef3c7;">AKUN KREDIT</th>
+                    <th style="text-align: right; background: #f3f4f6;">Jumlah Kredit</th>
+                </tr>
+                <tr>
+                    <th style="text-align: right; font-size: 10px; color: #047857;">DEBIT</th>
+                    <th style="text-align: right; font-size: 10px; color: #047857;">DEBIT</th>
+                    <th style="text-align: right; font-size: 10px; color: #b45309;">KREDIT</th>
+                </tr>
+            </thead>
+            <tbody>
+                {rows_jpk}
+                <tr style="background-color: #f9fafb; font-weight: 600;">
+                    <td colspan="3" style="padding: 12px 16px;">Total ({len(list_penerimaan)} bukti)</td>
+                    <td style="padding: 12px 16px; text-align: right;">{f"{int(sum_kas_debit):,.0f}".replace(',', '.')}</td>
+                    <td style="padding: 12px 16px; text-align: right;">{f"{int(sum_pot_debit):,.0f}".replace(',', '.') if sum_pot_debit > 0 else '-'}</td>
+                    <td style="text-align: right;">-</td>
+                    <td style="padding: 12px 16px; text-align: right;">{f"{int(sum_kredit_total):,.0f}".replace(',', '.')}</td>
+                </tr>
+            </tbody>
+        </table>
+        </div>
+        """
+
+    # Form Content Berdasarkan Tab Aktif
+    if active_tab == 'pelunasan':
+        form_tab_content = f"""
+        <input type="hidden" name="jenis_transaksi" value="pelunasan">
+        <div style="display: grid; grid-template-columns: 1fr 2fr 1.5fr 1fr; gap: 20px; margin-bottom: 20px;" class="form-group">
+            <div>
+                <label style="font-size: 13px; color: #374151; font-weight: 500;">Tanggal <span style="color: #ef4444;">*</span></label>
+                <input type="date" name="tanggal" id="inputTanggalPK" value="{today_date}" onchange="hitungDiskonTerminOtomatis()" style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+            </div>
+            <div>
+                <label style="font-size: 13px; color: #374151; font-weight: 500;">Pelanggan (kode / nama) <span style="color: #ef4444;">*</span></label>
+                <select name="pelanggan" id="selectPelangganPK" onchange="muatTagihanPelanggan(this)" style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; background: white;" required>
+                    {options_pelanggan}
+                </select>
+            </div>
+            <div>
+                <label style="font-size: 13px; color: #374151; font-weight: 500;">Setor ke akun <span style="color: #ef4444;">*</span></label>
+                <select name="akun_kas" style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; background: white;" required>
+                    {options_akun_kas}
+                </select>
+            </div>
+            <div>
+                <label style="font-size: 13px; color: #374151; font-weight: 500;">No. bukti</label>
+                <input type="text" name="no_bukti" placeholder="BKM-otomatis" style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+                <span style="font-size: 11px; color: #6b7280; margin-top: 2px; display: block;">Kosong = otomatis</span>
+            </div>
+        </div>
+
+        <!-- 3 KOTAK DI BAWAH PELANGGAN -->
+        <div id="wrapperDetailPelanggan" style="display: none;">
+            <div style="display: grid; grid-template-columns: 220px 1fr 1fr 200px; gap: 20px; align-items: start; background: #fdf2f4; border: 1px solid #fce7ec; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+                <div style="background: white; padding: 12px; border-radius: 6px; border: 1px solid #f5d0d8;">
+                    <div style="font-size: 11px; color: #6b7280;">Sisa piutang per {current_date_formatted}</div>
+                    <div id="labelSisaPiutangTotal" style="font-size: 18px; font-weight: 700; color: #1f2937; margin-top: 4px;">Rp 0</div>
+                </div>
+                <div>
+                    <label style="font-size: 13px; color: #374151; font-weight: 500;">Jumlah diterima <span style="color: #ef4444;">*</span></label>
+                    <input type="text" name="jumlah_diterima" id="inputJumlahDiterima" value="0" placeholder="0" oninput="formatRupiahPK(this)" style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; background: white;">
+                </div>
+                <div>
+                    <label style="font-size: 13px; color: #374151; font-weight: 500;">Potongan</label>
+                    <input type="text" name="potongan" id="inputPotongan" value="0" placeholder="0" oninput="formatRupiahPK(this)" style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; background: white;">
+                    <div style="font-size: 11px; color: #6b7280; margin-top: 3px;">Otomatis: diskon termin untuk faktur yang lunas dalam masa diskon</div>
+                </div>
+                <div style="padding-top: 22px;">
+                    <button type="button" onclick="lunasiSeluruhPiutang()" style="background: white; border: 1px solid #d18a99; color: #d18a99; padding: 8px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; width: 100%;">Lunasi seluruh piutang</button>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <label style="font-size: 13px; color: #374151; font-weight: 500;">Memo (Keterangan)</label>
+                <input type="text" name="memo" placeholder="Kosongkan jika ingin otomatis" style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+            </div>
+
+            <!-- TABEL ALOKASI FAKTUR -->
+            <div style="border: 1px solid #e5e7eb; border-radius: 8px; margin-top: 15px; background: white;">
+                <div style="padding: 12px 16px; background: #f9fafb; font-size: 13px; font-weight: 500; color: #374151; border-bottom: 1px solid #e5e7eb;">
+                    Alokasi faktur (klik baris untuk memilih faktur tertentu)
+                </div>
+                <div id="containerTagihan" style="padding: 40px 20px; text-align: center; color: #6b7280; font-size: 13px;">
+                    Pilih pelanggan untuk melihat sisa piutang.
+                </div>
+            </div>
+            <div style="font-size: 12px; color: #6b7280; margin-top: 12px;">
+                Cukup isi jumlah yang diterima: saldo piutang pelanggan berkurang, dan pembayaran otomatis dicatat ke transaksi terlama lebih dulu (termasuk transaksi bulan sebelumnya).
+            </div>
+        </div>
+        """
+    else:
+        form_tab_content = f"""
+        <input type="hidden" name="jenis_transaksi" value="lain">
+        <div style="display: grid; grid-template-columns: 1fr 2fr 2fr 1fr; gap: 20px; margin-bottom: 20px;" class="form-group">
+            <div>
+                <label style="font-size: 13px; color: #374151; font-weight: 500;">Tanggal <span style="color: #ef4444;">*</span></label>
+                <input type="date" name="tanggal" value="{today_date}" style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;" required>
+            </div>
+            <div>
+                <label style="font-size: 13px; color: #374151; font-weight: 500;">Masuk ke akun <span style="color: #ef4444;">*</span></label>
+                <select name="akun_kas" style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; background: white;" required>
+                    {options_akun_kas}
+                </select>
+            </div>
+            <div>
+                <label style="font-size: 13px; color: #374151; font-weight: 500;">Diterima dari</label>
+                <input type="text" name="diterima_dari" placeholder="Sumber penerimaan" style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+            </div>
+            <div>
+                <label style="font-size: 13px; color: #374151; font-weight: 500;">No. bukti</label>
+                <input type="text" name="no_bukti" placeholder="BKM-otomatis" style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+                <span style="font-size: 11px; color: #6b7280; margin-top: 2px; display: block;">Kosong = otomatis</span>
+            </div>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+            <label style="font-size: 13px; color: #374151; font-weight: 500;">Memo</label>
+            <input type="text" name="memo" placeholder="Keterangan" style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+        </div>
+
+        <!-- TABEL BARIS PENERIMAAN LAIN -->
+        <div style="border: 1px solid #e5e7eb; border-radius: 8px; background: white; overflow: hidden; margin-top: 20px;">
+            <table class="account-table" style="margin-bottom: 0;">
+                <thead>
+                    <tr>
+                        <th style="width: 6%;">#</th>
+                        <th style="width: 44%;">Akun (kode / nama)</th>
+                        <th style="width: 20%; text-align: right;">Jumlah</th>
+                        <th style="width: 24%;">Keterangan</th>
+                        <th style="width: 6%; text-align: center;"></th>
+                    </tr>
+                </thead>
+                <tbody id="tbodyPenerimaanLain">
+                    <tr>
+                        <td style="padding: 10px 16px; text-align: center; color: #6b7280;">1</td>
+                        <td style="padding: 10px 16px;">
+                            <select name="akun_baris[]" style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; background: white;">
+                                {options_semua_akun}
+                            </select>
+                        </td>
+                        <td style="padding: 10px 16px;">
+                            <input type="text" name="jumlah_baris[]" value="" placeholder="0" oninput="formatRupiahPK(this)" style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; text-align: right;">
+                        </td>
+                        <td style="padding: 10px 16px;">
+                            <input type="text" name="keterangan_baris[]" value="" placeholder="Keterangan baris" style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px;">
+                        </td>
+                        <td style="padding: 10px 16px; text-align: center;">
+                            <button type="button" onclick="hapusBarisLain(this)" style="background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 16px;">×</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 10px 16px; text-align: center; color: #6b7280;">2</td>
+                        <td style="padding: 10px 16px;">
+                            <select name="akun_baris[]" style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; background: white;">
+                                {options_semua_akun}
+                            </select>
+                        </td>
+                        <td style="padding: 10px 16px;">
+                            <input type="text" name="jumlah_baris[]" value="" placeholder="0" oninput="formatRupiahPK(this)" style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; text-align: right;">
+                        </td>
+                        <td style="padding: 10px 16px;">
+                            <input type="text" name="keterangan_baris[]" value="" placeholder="Keterangan baris" style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px;">
+                        </td>
+                        <td style="padding: 10px 16px; text-align: center;">
+                            <button type="button" onclick="hapusBarisLain(this)" style="background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 16px;">×</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 10px 16px; text-align: center; color: #6b7280;">3</td>
+                        <td style="padding: 10px 16px;">
+                            <select name="akun_baris[]" style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; background: white;">
+                                {options_semua_akun}
+                            </select>
+                        </td>
+                        <td style="padding: 10px 16px;">
+                            <input type="text" name="jumlah_baris[]" value="" placeholder="0" oninput="formatRupiahPK(this)" style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; text-align: right;">
+                        </td>
+                        <td style="padding: 10px 16px;">
+                            <input type="text" name="keterangan_baris[]" value="" placeholder="Keterangan baris" style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px;">
+                        </td>
+                        <td style="padding: 10px 16px; text-align: center;">
+                            <button type="button" onclick="hapusBarisLain(this)" style="background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 16px;">×</button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+            <div style="padding: 10px 16px; background: #f9fafb; border-top: 1px solid #e5e7eb;">
+                <button type="button" onclick="tambahBarisLain()" style="background: none; border: none; color: #d18a99; font-weight: 600; font-size: 13px; cursor: pointer;">+ Tambah baris</button>
+            </div>
+        </div>
+        """
+
+    content = f"""
+    <div style="margin-bottom: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+            <div>
+                <div class="page-title">Penerimaan Kas</div>
+                <div class="page-desc" style="margin-bottom: 15px; color: #6b7280; font-size: 13px;">
+                    Pelunasan piutang pelanggan (BKM) dan penerimaan kas lain-lain seperti pendapatan bunga atau setoran modal.
+                </div>
+            </div>
+            <div>
+                <button type="submit" form="formPenerimaanKas" style="background-color: #d18a99; color: white; border: none; padding: 10px 24px; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer;">Simpan</button>
+            </div>
+        </div>
+
+        <!-- TABS -->
+        <div style="display: flex; border-bottom: 1px solid #e5e7eb; gap: 30px; margin-bottom: 20px;">
+            <a href="/transaksi/penerimaan-kas?tab=pelunasan" style="padding-bottom: 10px; font-size: 14px; font-weight: 600; text-decoration: none; color: {'#d18a99' if active_tab == 'pelunasan' else '#6b7280'}; border-bottom: 2px solid {'#d18a99' if active_tab == 'pelunasan' else 'transparent'};">Pelunasan Piutang</a>
+            <a href="/transaksi/penerimaan-kas?tab=lain" style="padding-bottom: 10px; font-size: 14px; font-weight: 600; text-decoration: none; color: {'#d18a99' if active_tab == 'lain' else '#6b7280'}; border-bottom: 2px solid {'#d18a99' if active_tab == 'lain' else 'transparent'};">Penerimaan Lain</a>
+        </div>
+    </div>
+
+    <div class="card-form" style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin-bottom: 30px; position: relative;">
+        <form action="/transaksi/penerimaan-kas?tab={active_tab}" method="POST" id="formPenerimaanKas">
+            {form_tab_content}
+        </form>
+    </div>
+
+    <!-- LIST & JURNAL DI BAWAH -->
+    <div class="account-card" style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin-bottom: 25px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <div style="font-weight: 600; font-size: 15px; color: #1f2937;">Daftar pelunasan / penerimaan kas</div>
+            <div style="display: flex; gap: 8px; align-items: center;">
+                <input type="date" value="2026-01-01" style="padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px;">
+                <span style="font-size: 12px; color: #6b7280;">s.d.</span>
+                <input type="date" value="2026-10-31" style="padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px;">
+            </div>
+        </div>
+        {table_penerimaan_html}
+    </div>
+
+    <div class="account-card" style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px;">
+        <div style="font-weight: 600; font-size: 15px; color: #1f2937; margin-bottom: 15px;">Jurnal Penerimaan Kas</div>
+        {table_jurnal_html}
+    </div>
+
+    <script>
+        const daftarPenjualanPK = {json.dumps(list_penjualan)};
+        let activeTagihanPelanggan = [];
+
+        function muatTagihanPelanggan(selectEl) {{
+            const namaPelanggan = selectEl.value;
+            const wrapperDetail = document.getElementById('wrapperDetailPelanggan');
+            const labelSisa = document.getElementById('labelSisaPiutangTotal');
+            
+            if(!namaPelanggan) {{
+                if(wrapperDetail) wrapperDetail.style.display = 'none';
+                activeTagihanPelanggan = [];
+                return;
+            }}
+
+            if(wrapperDetail) wrapperDetail.style.display = 'block';
+
+            activeTagihanPelanggan = daftarPenjualanPK.filter(tr => tr.pelanggan.toLowerCase() === namaPelanggan.toLowerCase());
+            
+            let totalSisaPiutang = 0;
+            activeTagihanPelanggan.forEach(tr => {{
+                let sisaVal = parseFloat(String(tr.sisa || tr.total).replace(/[^\\d]/g, '') || 0);
+                totalSisaPiutang += sisaVal;
+            }});
+
+            if(labelSisa) {{
+                labelSisa.innerText = 'Rp ' + new Intl.NumberFormat('id-ID').format(totalSisaPiutang);
+            }}
+
+            renderTabelAlokasi([]);
+        }}
+
+        function renderTabelAlokasi(selectedFakturs = []) {{
+            const container = document.getElementById('containerTagihan');
+            if(activeTagihanPelanggan.length === 0) {{
+                container.innerHTML = 'Tidak ada tagihan/faktur untuk pelanggan ini.';
+                return;
+            }}
+
+            let rowsHtml = '';
+            activeTagihanPelanggan.forEach((tr, idx) => {{
+                let isChecked = selectedFakturs.includes(tr.nomor) ? 'checked' : '';
+                let sisaStr = tr.sisa || tr.total;
+                let dibayarVal = selectedFakturs.includes(tr.nomor) ? sisaStr : '0';
+
+                rowsHtml += `
+                <tr onclick="togglePilihFaktur('${{tr.nomor}}')" style="cursor: pointer;">
+                    <td style="padding: 12px 16px;"><input type="checkbox" name="faktur_terpilih[]" value="${{tr.nomor}}" data-sisa="${{sisaStr}}" data-tanggal="${{tr.tanggal}}" ${{isChecked}} onclick="event.stopPropagation(); updateJumlahDiterimaOtomatis();" style="cursor: pointer;"></td>
+                    <td style="padding: 12px 16px;"><strong>${{tr.nomor}}</strong> ${{tr.status === 'Saldo Awal' || idx === 0 ? '<span style="background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-size: 11px; color: #4b5563; margin-left: 6px;">Saldo awal</span>' : ''}}</td>
+                    <td style="padding: 12px 16px;">${{tr.tanggal_indo || tr.tanggal}}<br><span style="font-size: 11px; color: #6b7280;">JT ${{tr.jatuh_tempo || '-'}}</span></td>
+                    <td style="padding: 12px 16px; text-align: right; font-weight: 600; color: #1f2937;">Rp ${{sisaStr}}</td>
+                    <td style="padding: 12px 16px; text-align: right; font-weight: 600; color: #047857;" id="bayar_disp_${{tr.nomor}}">Rp ${{selectedFakturs.includes(tr.nomor) ? sisaStr : '0'}}</td>
+                    <td style="padding: 12px 16px; text-align: right; color: #6b7280;" id="potongan_disp_${{tr.nomor}}">Rp 0</td>
+                    <input type="hidden" name="bayar_alokasi[]" id="bayar_val_${{tr.nomor}}" value="${{dibayarVal}}">
+                </tr>
+                `;
+            }});
+
+            container.innerHTML = `
+            <table class="account-table">
+                <thead>
+                    <tr>
+                        <th style="width: 8%;">PILIH</th>
+                        <th style="width: 25%;">NO. FAKTUR</th>
+                        <th style="width: 22%;">TANGGAL</th>
+                        <th style="width: 15%; text-align: right;">SISA</th>
+                        <th style="width: 15%; text-align: right;">DIBAYAR</th>
+                        <th style="width: 15%; text-align: right;">POTONGAN</th>
+                    </tr>
+                </thead>
+                <tbody>${{rowsHtml}}</tbody>
+            </table>
+            `;
+        }}
+
+        function togglePilihFaktur(nomorFaktur) {{
+            const checkboxes = document.querySelectorAll('input[name="faktur_terpilih[]"]');
+            checkboxes.forEach(cb => {{
+                if(cb.value === nomorFaktur) {{
+                    cb.checked = !cb.checked;
+                }}
+            }});
+            updateJumlahDiterimaOtomatis();
+        }}
+
+        function lunasiSeluruhPiutang() {{
+            const checkboxes = document.querySelectorAll('input[name="faktur_terpilih[]"]');
+            checkboxes.forEach(cb => {{
+                cb.checked = true;
+            }});
+            updateJumlahDiterimaOtomatis();
+        }}
+
+        function updateJumlahDiterimaOtomatis() {{
+            const checkboxes = document.querySelectorAll('input[name="faktur_terpilih[]"]');
+            const inputDiterima = document.getElementById('inputJumlahDiterima');
+            const inputPotongan = document.getElementById('inputPotongan');
+            const tglBayarStr = document.getElementById('inputTanggalPK').value;
+            const tglBayar = new Date(tglBayarStr);
+
+            let totalDibayar = 0;
+            let totalPotongan = 0;
+
+            checkboxes.forEach(cb => {{
+                let nomor = cb.value;
+                let sisaStr = cb.getAttribute('data-sisa');
+                let tglFakturStr = cb.getAttribute('data-tanggal');
+                let sisaNum = parseFloat(sisaStr.replace(/[^\\d]/g, '') || 0);
+                
+                let dispEl = document.getElementById('bayar_disp_' + nomor);
+                let hiddenEl = document.getElementById('bayar_val_' + nomor);
+                let potDispEl = document.getElementById('potongan_disp_' + nomor);
+
+                if(cb.checked) {{
+                    let diskonFaktur = 0;
+                    if(tglFakturStr) {{
+                        let tglFak = new Date(tglFakturStr);
+                        let selisihHari = Math.floor((tglBayar - tglFak) / (1000 * 60 * 60 * 24));
+                        if(selisihHari >= 0 && selisihHari <= 10) {{
+                            diskonFaktur = Math.round(sisaNum * 0.01); 
+                        }}
+                    }}
+
+                    let bayarBersih = sisaNum - diskonFaktur;
+                    totalDibayar += bayarBersih;
+                    totalPotongan += diskonFaktur;
+
+                    dispEl.innerText = 'Rp ' + new Intl.NumberFormat('id-ID').format(bayarBersih);
+                    hiddenEl.value = new Intl.NumberFormat('id-ID').format(bayarBersih);
+                    potDispEl.innerText = diskonFaktur > 0 ? 'Rp ' + new Intl.NumberFormat('id-ID').format(diskonFaktur) : 'Rp 0';
+                }} else {{
+                    dispEl.innerText = 'Rp 0';
+                    hiddenEl.value = '0';
+                    potDispEl.innerText = 'Rp 0';
+                }}
+            }});
+
+            inputDiterima.value = new Intl.NumberFormat('id-ID').format(totalDibayar);
+            inputPotongan.value = new Intl.NumberFormat('id-ID').format(totalPotongan);
+        }}
+
+        function hitungDiskonTerminOtomatis() {{
+            updateJumlahDiterimaOtomatis();
+        }}
+
+        function tambahBarisLain() {{
+            const tbody = document.getElementById('tbodyPenerimaanLain');
+            const rowCount = tbody.rows.length + 1;
+            const newRow = tbody.insertRow();
+            newRow.innerHTML = `
+                <td style="padding: 10px 16px; text-align: center; color: #6b7280;">${{rowCount}}</td>
+                <td style="padding: 10px 16px;">
+                    <select name="akun_baris[]" style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; background: white;">
+                        {options_semua_akun}
+                    </select>
+                </td>
+                <td style="padding: 10px 16px;">
+                    <input type="text" name="jumlah_baris[]" value="" placeholder="0" oninput="formatRupiahPK(this)" style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; text-align: right;">
+                </td>
+                <td style="padding: 10px 16px;">
+                    <input type="text" name="keterangan_baris[]" value="" placeholder="Keterangan baris" style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px;">
+                </td>
+                <td style="padding: 10px 16px; text-align: center;">
+                    <button type="button" onclick="hapusBarisLain(this)" style="background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 16px;">×</button>
+                </td>
+            `;
+        }}
+
+        function hapusBarisLain(btn) {{
+            const row = btn.closest('tr');
+            if(row.parentNode.rows.length > 1) {{
+                row.remove();
+                const rows = document.getElementById('tbodyPenerimaanLain').rows;
+                for(let i=0; i<rows.length; i++) {{
+                    rows[i].cells[0].innerText = i + 1;
+                }}
+            }}
+        }}
+
+        function formatRupiahPK(el) {{
+            let angka = el.value.replace(/[^\\d]/g, '');
+            if (angka === "") {{ el.value = "0"; }}
+            else {{ el.value = new Intl.NumberFormat('id-ID').format(angka); }}
+        }}
+    </script>
+    """
+    return render_dashboard_layout('penerimaan_kas', content)
+
+# --- HALAMAN PEMBELIAN ---
+@app.route('/transaksi/pembelian')
+def transaksi_pembelian():
+    if 'user_email' not in session:
+        return redirect(url_for('login'))
+    
+    email = session['user_email']
+    user_data = database_user.get(email, {})
+    # sync_saldo_awal_pembelian(email) # Aktifkan jika ada fungsi sinkronisasi saldo awal pemasok
+    list_pembelian = user_data.get('pembelian', [])
+
+    if not list_pembelian:
+        table_pembelian_html = """
+        <div style="padding: 40px 20px; text-align: center; color: #6b7280; font-size: 13px;">
+            Tidak ada transaksi pada periode ini.
+        </div>
+        """
+        table_jurnal_html = """
+        <div style="padding: 40px 20px; text-align: center; color: #6b7280; font-size: 13px;">
+            Belum ada jurnal pada periode ini.
+        </div>
+        """
+    else:
+        rows_p = ""
+        rows_j = ""
+        total_nilai_trx = 0
+        total_nilai_sisa = 0
+        count_trx = 0
+        count_jurnal = 0
+        
+        sum_persediaan = 0
+        sum_ppn = 0
+        sum_utang = 0
+        sum_beban_angkut = 0
+
+        for tr in list_pembelian:
+            count_trx += 1
+            try:
+                t_val = int(tr.get('total', '0').replace('.', ''))
+            except:
+                t_val = 0
+            total_nilai_trx += t_val
+            
+            sisa_str = tr.get('sisa', tr.get('total'))
+            try:
+                s_val = int(str(sisa_str).replace('.', ''))
+            except:
+                s_val = t_val
+            total_nilai_sisa += s_val
+
+            no_faktur_display = tr.get('nomor')
+            if tr.get('is_saldo_awal', False):
+                no_faktur_display += ' <span class="badge-saldo-awal">Saldo awal</span>'
+
+            detail_url = f"/transaksi/pembelian/ubah/{tr.get('nomor')}"
+            
+            status_badge_html = f'<span class="badge-lunas">Lunas</span>' if s_val == 0 else f'<span class="badge-belum-lunas">{tr.get("status", "Belum lunas")}</span>'
+
+            rows_p += f"""
+            <tr>
+                <td style="padding: 12px 20px;">{tr.get('tanggal_indo', tr.get('tanggal'))}</td>
+                <td style="padding: 12px 20px;"><a href="{detail_url}" style="color: #d18a99; font-weight: 600; text-decoration: none;">{no_faktur_display}</a></td>
+                <td style="padding: 12px 20px;">{tr.get('pemasok')}</td>
+                <td style="padding: 12px 20px;">{status_badge_html}</td>
+                <td style="padding: 12px 20px;">{tr.get('jatuh_tempo', '-')}</td>
+                <td style="padding: 12px 20px; text-align: right;">{tr.get('total')}</td>
+                <td style="padding: 12px 20px; text-align: right; color: #b45309; font-weight: 500;">{f"{s_val:,.0f}".replace(',', '.')}</td>
+            </tr>
+            """
+            
+            if tr.get('is_saldo_awal', False):
+                continue
+
+            count_jurnal += 1
+            utang_val = t_val
+            
+            dpp_val = int(tr.get('dpp', 0) or 0)
+            ppn_val = int(tr.get('ppn', 0) or 0)
+            beban_angkut_val = int(tr.get('beban_angkut_nilai', 0) or 0)
+            
+            # Persediaan bertambah sebesar DPP + beban angkut (jika ada kapitalisasi)
+            persediaan_val = dpp_val + beban_angkut_val
+
+            sum_persediaan += persediaan_val
+            sum_ppn += ppn_val
+            sum_utang += utang_val
+            sum_beban_angkut += beban_angkut_val
+
+            ket_jurnal = f"Pembelian kredit - {tr.get('pemasok')}"
+            if tr.get('memo'):
+                ket_jurnal += f" ({tr.get('memo')})"
+
+            rows_j += f"""
+            <tr>
+                <td style="padding: 12px 20px; white-space: nowrap;">{tr.get('tanggal_indo', tr.get('tanggal'))}</td>
+                <td style="padding: 12px 20px;"><a href="{detail_url}" style="color: #d18a99; font-weight: 600; text-decoration: none;">{tr.get('nomor')}</a></td>
+                <td style="padding: 12px 20px;">{ket_jurnal}</td>
+                <td style="padding: 12px 20px; text-align: right;">{f"{persediaan_val:,.0f}".replace(',', '.') if persediaan_val > 0 else '-'}</td>
+                <td style="padding: 12px 20px; text-align: right;">{f"{ppn_val:,.0f}".replace(',', '.') if ppn_val > 0 else '-'}</td>
+                <td style="padding: 12px 20px; text-align: right;">{f"{utang_val:,.0f}".replace(',', '.') if utang_val > 0 else '-'}</td>
+            </tr>
+            """
+            
+        formatted_total_trx = f"{total_nilai_trx:,.0f}".replace(',', '.')
+        formatted_total_sisa = f"{total_nilai_sisa:,.0f}".replace(',', '.')
+        
+        table_pembelian_html = f"""
+        <table class="account-table">
+            <thead>
+                <tr>
+                    <th style="width: 13%;">TANGGAL</th>
+                    <th style="width: 20%;">NO. BUKTI</th>
+                    <th style="width: 25%;">PEMASOK</th>
+                    <th style="width: 12%;">STATUS</th>
+                    <th style="width: 12%;">JATUH TEMPO</th>
+                    <th style="width: 13%; text-align: right;">TOTAL</th>
+                    <th style="width: 13%; text-align: right;">SISA</th>
+                </tr>
+            </thead>
+            <tbody>
+                {rows_p}
+                <tr style="background-color: #f9fafb; font-weight: 600;">
+                    <td colspan="5" style="padding: 12px 20px;">Total ({count_trx} transaksi)</td>
+                    <td style="padding: 12px 20px; text-align: right;">{formatted_total_trx}</td>
+                    <td style="padding: 12px 20px; text-align: right; color: #b45309;">{formatted_total_sisa}</td>
+                </tr>
+            </tbody>
+        </table>
+        """
+
+        if count_jurnal == 0:
+            table_jurnal_html = """
+            <div style="padding: 40px 20px; text-align: center; color: #6b7280; font-size: 13px;">
+                Belum ada transaksi pembelian baru.
+            </div>
+            """
+        else:
+            table_jurnal_html = f"""
+            <div style="overflow-x: auto;">
+            <table class="account-table" style="min-width: 950px;">
+                <thead>
+                    <tr>
+                        <th rowspan="2" style="width: 12%; vertical-align: middle;">TANGGAL</th>
+                        <th rowspan="2" style="width: 15%; vertical-align: middle;">NO. BUKTI</th>
+                        <th rowspan="2" style="width: 28%; vertical-align: middle;">KETERANGAN</th>
+                        <th style="width: 15%; text-align: right; background: #f3f4f6;">Persediaan Barang Dagang</th>
+                        <th style="width: 15%; text-align: right; background: #f3f4f6;">PPN Masukan</th>
+                        <th style="width: 15%; text-align: right; background: #f3f4f6;">Utang Usaha</th>
+                    </tr>
+                    <tr>
+                        <th style="text-align: right; font-size: 10px; color: #047857;">DEBIT</th>
+                        <th style="text-align: right; font-size: 10px; color: #047857;">DEBIT</th>
+                        <th style="text-align: right; font-size: 10px; color: #1d4ed8;">KREDIT</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {rows_j}
+                    <tr style="background-color: #f9fafb; font-weight: 600;">
+                        <td colspan="3" style="padding: 12px 20px;">Total ({count_jurnal} bukti)</td>
+                        <td style="padding: 12px 20px; text-align: right;">{f"{sum_persediaan:,.0f}".replace(',', '.')}</td>
+                        <td style="padding: 12px 20px; text-align: right;">{f"{sum_ppn:,.0f}".replace(',', '.')}</td>
+                        <td style="padding: 12px 20px; text-align: right;">{f"{sum_utang:,.0f}".replace(',', '.')}</td>
+                    </tr>
+                </tbody>
+            </table>
+            </div>
+            """
+
+    content = f"""
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
+        <div>
+            <div class="page-title">Pembelian</div>
+            <div class="page-desc" style="margin-bottom: 0;">Transaksi pembelian tunai & kredit. Persediaan bertambah dan harga rata-rata diperbarui otomatis.</div>
+        </div>
+        <div>
+            <a href="/transaksi/pembelian/baru" style="background-color: #d18a99; color: white; padding: 10px 18px; border-radius: 6px; font-size: 14px; font-weight: 500; text-decoration: none; display: inline-block;">+ Tambah Transaksi</a>
+        </div>
+    </div>
+
+    <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 15px 20px; margin-bottom: 25px; display: flex; align-items: center; gap: 15px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <input type="date" value="2026-01-01" style="padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+            <span style="font-size: 13px; color: #6b7280;">s.d.</span>
+            <input type="date" value="2026-10-31" style="padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+        </div>
+        <div>
+            <select style="padding: 6px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+                <option>Semua status</option>
+                <option>Tunai</option>
+                <option>Lunas</option>
+                <option>Sebagian</option>
+                <option>Belum lunas</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="account-card" style="margin-bottom: 25px;">
+        {table_pembelian_html}
+    </div>
+
+    <div class="account-card">
+        <div style="padding: 15px 20px; font-weight: 600; font-size: 15px; color: #1f2937; border-bottom: 1px solid #e5e7eb;">Jurnal Pembelian</div>
+        {table_jurnal_html}
+    </div>
+    """
+    
+    return render_dashboard_layout('pembelian', content)
+
+
+@app.route('/transaksi/pembelian/baru', methods=['GET', 'POST'])
+def tambah_transaksi_pembelian():
+    if 'user_email' not in session:
+        return redirect(url_for('login'))
+    
+    email = session['user_email']
+    user_data = database_user.get(email, {})
+    list_pemasok = user_data.get('pemasok', [])
+    list_barang = user_data.get('barang', [])
+    
+    if request.method == 'POST':
+        tanggal = request.form.get('tanggal')
+        pemasok = request.form.get('pemasok')
+        no_faktur = request.form.get('no_faktur').strip()
+        if not no_faktur:
+            no_faktur = f"BKP-{len(user_data.get('pembelian', [])) + 1:02d}"
+        
+        pembayaran = request.form.get('pembayaran')
+        termin_pot = request.form.get('termin_pot', '')
+        termin_hari = request.form.get('termin_hari', '')
+        termin_jt = request.form.get('termin_jt', '30')
+        termin = f"{termin_pot}/{termin_hari}, n/{termin_jt}" if termin_pot and termin_hari else f"n/{termin_jt}"
+        memo = request.form.get('memo', '')
+        
+        item_barangs = request.form.getlist('item_barang[]')
+        item_qtys = request.form.getlist('item_qty[]')
+        item_hargas = request.form.getlist('item_harga[]')
+        
+        ppn_persen_raw = request.form.get('ppn_persen', '0')
+        ppn_persen = float(ppn_persen_raw) if ppn_persen_raw != '' and ppn_persen_raw != '-' else 0.0
+        
+        diskon_jenis = request.form.get('diskon_jenis', 'Rp')
+        diskon_nilai = float(request.form.get('diskon_nilai', 0) or 0)
+        
+        beban_angkut = True if request.form.get('beban_angkut') else False
+        beban_angkut_nilai = float(request.form.get('beban_angkut_nilai', 0) or 0) if beban_angkut else 0.0
+        
+        subtotal = 0
+        details = []
+        for i in range(len(item_barangs)):
+            brg_str = item_barangs[i]
+            if not brg_str:
+                continue
+            qty_raw = float(item_qtys[i].replace('.', '') or 0)
+            qty = int(qty_raw) if qty_raw.is_integer() else qty_raw
+            harga = float(item_hargas[i].replace('.', '') or 0)
+            jumlah = qty * harga
+            subtotal += jumlah
+            
+            details.append({
+                'barang': brg_str, 
+                'qty': qty, 
+                'harga': harga, 
+                'jumlah': jumlah
+            })
+            
+            # Update stok barang & HPP rata-rata (Moving Average) secara otomatis di database user
+            kode_brg_match = brg_str.split(' - ')[0].strip()
+            for b in list_barang:
+                if b.get('kode') == kode_brg_match:
+                    stok_lama = float(b.get('qty_awal', 0) or 0)
+                    hpp_lama = float(b.get('harga_pokok', 0) or 0)
+                    stok_baru = stok_lama + qty
+                    if stok_baru > 0:
+                        # Rumus Harga Pokok Rata-rata Bergerak
+                        hpp_baru = ((stok_lama * hpp_lama) + (qty * harga)) / stok_baru
+                        b['harga_pokok'] = hpp_baru
+                    b['qty_awal'] = stok_baru
+                    break
+
+        diskon_nominal = diskon_nilai if diskon_jenis == 'Rp' else (subtotal * diskon_nilai / 100)
+        dpp = subtotal - diskon_nominal
+        ppn_nominal = dpp * (ppn_persen / 100)
+        total_transaksi = dpp + ppn_nominal + beban_angkut_nilai
+        
+        formatted_total = f"{int(total_transaksi):,.0f}".replace(',', '.')
+        
+        try:
+            dt_trx = datetime.strptime(tanggal, '%Y-%m-%d')
+            dt_jt = dt_trx + timedelta(days=int(termin_jt or 30))
+            str_jt = format_tanggal_pendek_indo(dt_jt.strftime('%Y-%m-%d'))
+        except:
+            str_jt = "-"
+
+        if 'pembelian' not in database_user[email]:
+            database_user[email]['pembelian'] = []
+
+        transaksi = {
+            'tanggal': tanggal,
+            'tanggal_indo': format_tanggal_pendek_indo(tanggal),
+            'nomor': no_faktur,
+            'pemasok': pemasok,
+            'status': 'Belum lunas',
+            'jatuh_tempo': str_jt,
+            'total': formatted_total,
+            'sisa': formatted_total,
+            'pembayaran': pembayaran,
+            'termin': termin,
+            'termin_pot': termin_pot,
+            'termin_hari': termin_hari,
+            'termin_jt': termin_jt,
+            'memo': memo,
+            'ppn_persen': ppn_persen,
+            'diskon_jenis': diskon_jenis,
+            'diskon_nilai': diskon_nilai,
+            'beban_angkut': beban_angkut,
+            'beban_angkut_nilai': beban_angkut_nilai,
+            'dpp': dpp,
+            'ppn': ppn_nominal,
+            'is_saldo_awal': False,
+            'details': details
+        }
+        database_user[email]['pembelian'].append(transaksi)
+        
+        return redirect(url_for('ubah_transaksi_pembelian_detail', nomor=no_faktur))
+
+    today_date = datetime.now().strftime('%Y-%m-%d')
+
+    options_pemasok = ""
+    pemasok_termin_map = {}
+    for p in list_pemasok:
+        p_nama = p.get('nama')
+        pot = p.get('potongan', '')
+        jb = p.get('jika_bayar', '')
+        jt = p.get('jatuh_tempo', '30') or '30'
+        pemasok_termin_map[p_nama] = {'pot': pot, 'jb': jb, 'jt': jt}
+        options_pemasok += f'<option value="{p_nama}">{p.get("kode")} — {p_nama}</option>'
+
+    options_barang = "".join([f'<option value="{b.get("kode")} — {b.get("nama")}" data-harga="{b.get("harga_beli", b.get("harga_pokok", 0))}">{b.get("kode")} {b.get("nama")} (Stok: {b.get("qty_awal", 0)})</option>' for b in list_barang])
+
+    content = f"""
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <div>
+                <div class="page-title" style="display: flex; align-items: center; gap: 10px;">
+                    Tambah Transaksi Pembelian
+                </div>
+                <div style="font-size: 13px; color: #6b7280; margin-top: 4px;">
+                    Nomor dibuat otomatis bila dikosongkan. Grid bisa diisi dengan tempel (Ctrl+V) dari Excel: Kode barang | Qty | Harga.
+                </div>
+            </div>
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <a href="/transaksi/pembelian" class="btn-action" style="padding: 8px 16px; font-weight: 500;">← Daftar</a>
+            <a href="/transaksi/pembelian/baru" class="btn-action" style="padding: 8px 16px; font-weight: 500; background: #fff; border-color: #d18a99; color: #d18a99;">+ Baru</a>
+        </div>
+    </div>
+
+    <div class="card-form" style="margin-bottom: 25px;">
+        <form action="/transaksi/pembelian/baru" method="POST" id="formPembelian">
+            
+            <div style="display: grid; grid-template-columns: 1fr 2fr 1.5fr; gap: 20px;" class="form-group">
+                <div>
+                    <label>Tanggal <span class="required">*</span></label>
+                    <input type="date" name="tanggal" value="{today_date}" required>
+                </div>
+                <div>
+                    <label>Pemasok (kode / nama) <span class="required">*</span></label>
+                    <select name="pemasok" id="selectPemasok" onchange="muatTerminPemasok(this)" required>
+                        <option value="">-- Pilih Pemasok --</option>
+                        {options_pemasok}
+                    </select>
+                </div>
+                <div>
+                    <label>No. bukti</label>
+                    <input type="text" name="no_faktur" value="" placeholder="FB-otomatis">
+                    <span style="font-size: 11px; color: #6b7280;">Kosongkan = otomatis</span>
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 2fr 1.5fr; gap: 20px;" class="form-group">
+                <div>
+                    <label>Pembayaran</label>
+                    <select name="pembayaran" id="selectPembayaran">
+                        <option value="Kredit (dengan termin)">Kredit (dengan termin)</option>
+                        <option value="Tunai">Tunai</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Termin</label>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
+                        <input type="text" name="termin_pot" id="inputTerminPot" value="" placeholder="%" style="text-align: center;">
+                        <input type="text" name="termin_hari" id="inputTerminHari" value="" placeholder="hari" style="text-align: center;">
+                        <input type="text" name="termin_jt" id="inputTerminJt" value="30" placeholder="n/..." style="text-align: center;">
+                    </div>
+                </div>
+                <div>
+                    <label>Memo</label>
+                    <input type="text" name="memo" placeholder="Keterangan">
+                </div>
+            </div>
+
+            <div class="account-card" style="margin: 20px 0;">
+                <table class="account-table" id="tabelItem">
+                    <thead>
+                        <tr>
+                            <th style="width: 5%;">#</th>
+                            <th style="width: 45%;">Barang (kode / nama)</th>
+                            <th style="width: 15%;">Qty</th>
+                            <th style="width: 20%; text-align: right;">Harga beli</th>
+                            <th style="width: 15%; text-align: right;">Jumlah</th>
+                            <th style="width: 5%; text-align: center;"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbodyItem">
+                        <tr>
+                            <td>1</td>
+                            <td>
+                                <select name="item_barang[]" onchange="updateHargaBeli(this)" style="border:none; width:100%; background:transparent;">
+                                    <option value="">-- Pilih Barang --</option>
+                                    {options_barang}
+                                </select>
+                            </td>
+                            <td><input type="text" name="item_qty[]" value="" oninput="hitungBaris(this)" style="border:none; width:100%; background:transparent; text-align:left;"></td>
+                            <td><input type="text" name="item_harga[]" value="" oninput="hitungBaris(this)" style="border:none; width:100%; background:transparent; text-align:right;"></td>
+                            <td style="text-align: right;" class="col-jumlah">-</td>
+                            <td style="text-align: center;"><a href="#" onclick="hapusBaris(this); return false;" style="color: #dc2626; text-decoration: none;">✕</a></td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div style="padding: 10px 20px; background: #f9fafb; display: flex; justify-content: space-between; align-items: center;">
+                    <button type="button" onclick="tambahBaris()" style="background: none; border: none; color: #d18a99; font-weight: 600; cursor: pointer; font-size: 13px;">+ Tambah baris</button>
+                    <span style="font-size: 11px; color: #6b7280;">Enter/↓ bawah · ↑ atas · Tab kanan · Esc batal · Ctrl+V tempel dari Excel</span>
+                </div>
+            </div>
+
+            <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px; margin-bottom: 25px; font-size: 13px;">
+                <div style="display: flex; width: 420px; justify-content: space-between; padding: 4px 0;">
+                    <span style="color: #6b7280;">Subtotal</span>
+                    <span id="displaySubtotal" style="font-weight: 600; min-width: 120px; text-align: right;">-</span>
+                </div>
+                <div style="display: flex; width: 420px; justify-content: space-between; align-items: center; padding: 4px 0;">
+                    <span style="color: #6b7280;">Diskon dagang / rabat</span>
+                    <div style="display: flex; gap: 5px; align-items: center;">
+                        <select name="diskon_jenis" onchange="hitungTotalSemua()" style="padding: 4px; font-size: 12px; width: 55px;">
+                            <option value="Rp">Rp</option>
+                            <option value="%">%</option>
+                        </select>
+                        <input type="text" name="diskon_nilai" value="" placeholder="-" oninput="hitungTotalSemua()" style="padding: 4px; text-align: right; font-size: 12px; width: 95px;">
+                        <span id="displayDiskonNominal" style="min-width: 100px; text-align: right; font-weight: 500; color: #374151;">-</span>
+                    </div>
+                </div>
+
+                <div style="display: flex; flex-direction: column; width: 420px; padding: 4px 0;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 0; color: #6b7280; font-weight: normal; cursor: pointer;">
+                            <input type="checkbox" name="beban_angkut" id="checkboxBebanAngkut" onclick="toggleBebanAngkutPanel()" style="width: 14px; height: 14px; accent-color: #d18a99;"> Beban Angkut
+                        </label>
+                        <span id="displayBebanAngkutNominal" style="min-width: 120px; text-align: right; font-weight: 500; color: #374151;">-</span>
+                    </div>
+                    <div id="panelBebanAngkut" style="display: none; background: #f9fafb; padding: 10px; border-radius: 6px; border: 1px solid #e5e7eb; margin-top: 8px;">
+                        <label style="font-size: 11px; margin-bottom: 4px;">Nilai Beban Angkut (Rp)</label>
+                        <input type="text" name="beban_angkut_nilai" id="inputBebanAngkutNilai" value="" placeholder="-" oninput="formatRupiah(this); hitungTotalSemua();" style="padding: 6px; font-size: 13px;">
+                    </div>
+                </div>
+
+                <div style="display: flex; width: 420px; justify-content: space-between; align-items: center; padding: 4px 0;">
+                    <span style="color: #6b7280;">PPN Masukan</span>
+                    <div style="display: flex; gap: 5px; align-items: center;">
+                        <input type="text" name="ppn_persen" value="0" onfocus="if(this.value==='0') this.value='';" onblur="if(this.value==='') this.value='0';" oninput="hitungTotalSemua()" style="width: 65px; padding: 4px; text-align: right; font-size: 12px;">
+                        <span style="margin-right: 15px;">%</span>
+                        <span id="displayPpnNominal" style="min-width: 100px; text-align: right; font-weight: 500; color: #374151;">-</span>
+                    </div>
+                </div>
+                <div style="display: flex; width: 420px; justify-content: space-between; border-top: 2px solid #e5e7eb; padding-top: 10px; font-size: 15px; font-weight: bold; color: #1f2937;">
+                    <span>Total</span>
+                    <span id="displayTotal" style="min-width: 120px; text-align: right;">-</span>
+                </div>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; align-items: center; border-top: 1px solid #e5e7eb; padding-top: 20px;">
+                <button type="submit" class="btn-simpan" style="background-color: #d18a99; padding: 10px 28px;">Simpan transaksi</button>
+            </div>
+
+        </form>
+    </div>
     
     <script>
+        const pemasokTerminMap = {json.dumps(pemasok_termin_map)};
+
+        function muatTerminPemasok(selectEl) {{
+            const namaPls = selectEl.value;
+            if (pemasokTerminMap[namaPls]) {{
+                const t = pemasokTerminMap[namaPls];
+                document.getElementById('inputTerminPot').value = t.pot || '';
+                document.getElementById('inputTerminHari').value = t.jb || '';
+                document.getElementById('inputTerminJt').value = t.jt || '30';
+            }} else {{
+                document.getElementById('inputTerminPot').value = '';
+                document.getElementById('inputTerminHari').value = '';
+                document.getElementById('inputTerminJt').value = '30';
+            }}
+        }}
+
         function toggleBebanAngkutPanel() {{
             const chk = document.getElementById('checkboxBebanAngkut');
             const panel = document.getElementById('panelBebanAngkut');
-            if(chk.checked) {{
-                panel.style.display = 'block';
-            }} else {{
+            if(chk.checked) {{ panel.style.display = 'block'; }}
+            else {{
                 panel.style.display = 'none';
                 document.getElementById('inputBebanAngkutNilai').value = '';
                 hitungTotalSemua();
             }}
         }}
 
-        function updateHarga(selectEl) {{
+        function updateHargaBeli(selectEl) {{
             const row = selectEl.closest('tr');
             const selectedOpt = selectEl.options[selectEl.selectedIndex];
             const harga = selectedOpt.getAttribute('data-harga') || 0;
@@ -3292,19 +4957,10 @@ def ubah_transaksi_penjualan_detail(nomor):
             hitungBaris(hargaInput);
         }}
 
-        function formatRupiahInput(el) {{
-            let angka = el.value.replace(/[^\\d]/g, '');
-            if (angka === "") {{
-                el.value = "";
-            }} else {{
-                el.value = new Intl.NumberFormat('id-ID').format(parseInt(angka, 10));
-            }}
-        }}
-
         function hitungBaris(el) {{
             const row = el.closest('tr');
-            const qty = parseFloat(row.querySelector('input[name="item_qty[]"]').value.replace(/\\./g, '')) || 0;
-            const harga = parseFloat(row.querySelector('input[name="item_harga[]"]').value.replace(/\\./g, '').replace(/,/g, '')) || 0;
+            const qty = parseFloat(row.querySelector('input[name="item_qty[]"]').value.replace(/\./g, '')) || 0;
+            const harga = parseFloat(row.querySelector('input[name="item_harga[]"]').value.replace(/\./g, '')) || 0;
             const jumlah = qty * harga;
             row.querySelector('.col-jumlah').textContent = jumlah > 0 ? new Intl.NumberFormat('id-ID').format(jumlah) : '-';
             hitungTotalSemua();
@@ -3312,54 +4968,40 @@ def ubah_transaksi_penjualan_detail(nomor):
 
         function formatRupiah(el) {{
             let angka = el.value.replace(/[^\\d]/g, '');
-            if (angka === "") {{
-                el.value = "";
-            }} else {{
-                let formatted = new Intl.NumberFormat('id-ID').format(angka);
-                el.value = formatted;
-            }}
+            if (angka === "") {{ el.value = ""; }}
+            else {{ el.value = new Intl.NumberFormat('id-ID').format(angka); }}
         }}
 
         function hitungTotalSemua() {{
             let subtotal = 0;
             document.querySelectorAll('#tbodyItem tr').forEach(row => {{
-                const qty = parseFloat(row.querySelector('input[name="item_qty[]"]').value.replace(/\\./g, '')) || 0;
-                const harga = parseFloat(row.querySelector('input[name="item_harga[]"]').value.replace(/\\./g, '').replace(/,/g, '')) || 0;
+                const qty = parseFloat(row.querySelector('input[name="item_qty[]"]').value.replace(/\./g, '')) || 0;
+                const harga = parseFloat(row.querySelector('input[name="item_harga[]"]').value.replace(/\./g, '')) || 0;
                 subtotal += (qty * harga);
             }});
             
             document.getElementById('displaySubtotal').textContent = subtotal > 0 ? new Intl.NumberFormat('id-ID').format(subtotal) : '-';
 
             const diskonJenis = document.querySelector('select[name="diskon_jenis"]').value;
-            const diskonNilaiRaw = document.querySelector('input[name="diskon_nilai"]').value;
-            const diskonNilai = (diskonNilaiRaw === '' || diskonNilaiRaw === '-') ? 0 : (parseFloat(diskonNilaiRaw.replace(/\\./g, '')) || 0);
+            const diskonNilai = parseFloat(document.querySelector('input[name="diskon_nilai"]').value.replace(/\./g, '')) || 0;
             let diskonNominal = diskonJenis === 'Rp' ? diskonNilai : (subtotal * diskonNilai / 100);
             
             const elDiskon = document.getElementById('displayDiskonNominal');
-            if (diskonNominal > 0) {{
-                elDiskon.textContent = '- ' + new Intl.NumberFormat('id-ID').format(diskonNominal);
-            }} else {{
-                elDiskon.textContent = '-';
-            }}
+            elDiskon.textContent = diskonNominal > 0 ? '(Rp ' + new Intl.NumberFormat('id-ID').format(diskonNominal) + ')' : '-';
 
             const dpp = subtotal - diskonNominal;
-
             const ppnPersenRaw = document.querySelector('input[name="ppn_persen"]').value;
-            const ppnPersen = (ppnPersenRaw === '' || ppnPersenRaw === '-') ? 0 : (parseFloat(ppnPersenRaw.replace(/\\./g, '')) || 0);
-            
+            const ppnPersen = (ppnPersenRaw === '' || ppnPersenRaw === '-') ? 0 : (parseFloat(ppnPersenRaw.replace(/\./g, '')) || 0);
             const ppnNominal = dpp * (ppnPersen / 100);
 
-            const elPpn = document.getElementById('displayPpnNominal');
-            elPpn.textContent = ppnNominal > 0 ? new Intl.NumberFormat('id-ID').format(ppnNominal) : '-';
+            document.getElementById('displayPpnNominal').textContent = ppnNominal > 0 ? new Intl.NumberFormat('id-ID').format(ppnNominal) : '-';
 
             let bebanAngkutNilai = 0;
             const chk = document.getElementById('checkboxBebanAngkut');
             if(chk && chk.checked) {{
-                const bebanRaw = document.getElementById('inputBebanAngkutNilai').value;
-                bebanAngkutNilai = (bebanRaw === '' || bebanRaw === '-') ? 0 : (parseFloat(bebanRaw.replace(/\\./g, '')) || 0);
+                bebanAngkutNilai = parseFloat(document.getElementById('inputBebanAngkutNilai').value.replace(/\./g, '')) || 0;
             }}
-            const elBeban = document.getElementById('displayBebanAngkutNominal');
-            elBeban.textContent = bebanAngkutNilai > 0 ? new Intl.NumberFormat('id-ID').format(bebanAngkutNilai) : '-';
+            document.getElementById('displayBebanAngkutNominal').textContent = bebanAngkutNilai > 0 ? new Intl.NumberFormat('id-ID').format(bebanAngkutNilai) : '-';
 
             const total = dpp + ppnNominal + bebanAngkutNilai;
             document.getElementById('displayTotal').textContent = total > 0 ? new Intl.NumberFormat('id-ID').format(total) : '-';
@@ -3370,15 +5012,15 @@ def ubah_transaksi_penjualan_detail(nomor):
             const rowCount = tbody.rows.length + 1;
             const newRow = document.createElement('tr');
             newRow.innerHTML = `
-                <td>` + rowCount + `</td>
+                <td>${{rowCount}}</td>
                 <td>
-                    <select name="item_barang[]" onchange="updateHarga(this)" style="border:none; width:100%; background:transparent;">
+                    <select name="item_barang[]" onchange="updateHargaBeli(this)" style="border:none; width:100%; background:transparent;">
                         <option value="">-- Pilih Barang --</option>
                         {options_barang}
                     </select>
                 </td>
                 <td><input type="text" name="item_qty[]" value="" oninput="hitungBaris(this)" style="border:none; width:100%; background:transparent; text-align:left;"></td>
-                <td><input type="text" name="item_harga[]" value="" oninput="formatRupiahInput(this); hitungBaris(this);" style="border:none; width:100%; background:transparent; text-align:right;"></td>
+                <td><input type="text" name="item_harga[]" value="" oninput="hitungBaris(this)" style="border:none; width:100%; background:transparent; text-align:right;"></td>
                 <td style="text-align: right;" class="col-jumlah">-</td>
                 <td style="text-align: center;"><a href="#" onclick="hapusBaris(this); return false;" style="color: #dc2626; text-decoration: none;">✕</a></td>
             `;
@@ -3392,260 +5034,1861 @@ def ubah_transaksi_penjualan_detail(nomor):
                 hitungTotalSemua();
             }}
         }}
-
-        window.onload = function() {{ hitungTotalSemua(); }};
     </script>
     """
     
-    return render_dashboard_layout('penjualan', content)
-
-@app.route('/setup/akun/toggle/<path:kode>')
-def toggle_akun(kode):
-    if 'user_email' not in session:
-        return redirect(url_for('login'))
-    email = session['user_email']
-    for acc in database_user[email]['akun']:
-        if acc['kode'] == kode and not acc['sistem']:
-            acc['aktif'] = not acc['aktif']
-    return redirect(url_for('daftar_akun'))
-
-@app.route('/setup/akun/hapus/<path:kode>')
-def hapus_akun(kode):
-    if 'user_email' not in session:
-        return redirect(url_for('login'))
-    email = session['user_email']
-    database_user[email]['akun'] = [acc for acc in database_user[email]['akun'] if not (acc['kode'] == kode and not acc['sistem'])]
-    return redirect(url_for('daftar_akun'))
-
-@app.route('/setup/akun/baru', methods=['GET', 'POST'])
-def tambah_akun():
+    return render_dashboard_layout('pembelian', content)
+@app.route('/transaksi/pembelian/ubah/<path:nomor>')
+def ubah_transaksi_pembelian_detail(nomor):
     if 'user_email' not in session:
         return redirect(url_for('login'))
     
     email = session['user_email']
-    default_level = request.args.get('level', 'Akun biasa')
-    default_induk = request.args.get('induk', '')
+    user_data = database_user.get(email, {})
+    list_pembelian = user_data.get('pembelian', [])
+    list_pemasok = user_data.get('pemasok', [])
+    list_barang = user_data.get('barang', [])
     
-    if request.method == 'POST':
-        level = request.form.get('level_akun', 'Akun biasa')
-        kategori = request.form.get('header_akun')
-        kode = request.form.get('kode_akun').strip()
-        nama = request.form.get('nama_akun').strip()
-        tipe = request.form.get('tipe_akun')
-        induk = request.form.get('akun_induk')
-        dk = "D" if request.form.get('saldo_normal') == "Debit" else "K"
-        aktif = True if request.form.get('akun_aktif') else False
+    target_trx = None
+    for tr in list_pembelian:
+        if tr.get('nomor') == nomor:
+            target_trx = tr
+            break
+            
+    if not target_trx:
+        return redirect(url_for('transaksi_pembelian'))
+
+    options_pemasok = "".join([f'<option value="{p.get("nama")}" {"selected" if p.get("nama") == target_trx.get("pemasok") else ""}>{p.get("kode")} — {p.get("nama")}</option>' for p in list_pemasok])
+
+    rows_item_html = ""
+    details = target_trx.get('details', [])
+    if not details:
+        details = [{'barang': '', 'qty': '', 'harga': 0, 'jumlah': 0}]
+
+    for idx, det in enumerate(details):
+        r_num = idx + 1
+        q_raw = float(det.get('qty', 0) or 0)
+        q_val = f"{int(q_raw)}" if q_raw.is_integer() else f"{q_raw}"
+        h_val = f"{int(det.get('harga', 0)):,.0f}".replace(',', '.') if det.get('harga') else ''
+        j_val = f"{int(det.get('jumlah', 0)):,.0f}".replace(',', '.') if det.get('jumlah') else '-'
         
-        user_akun_list = database_user[email]['akun']
-        for acc in user_akun_list:
-            if acc['kode'].lower() == kode.lower():
-                session['error_akun'] = f"Gagal: Kode akun '{kode}' sudah terdaftar!"
-                return redirect(url_for('daftar_akun'))
-            if acc['nama'].lower() == nama.lower():
-                session['error_akun'] = f"Gagal: Nama akun '{nama}' sudah terdaftar!"
-                return redirect(url_for('daftar_akun'))
-
-        new_acc = {
-            "kode": kode,
-            "nama": nama,
-            "level": level,
-            "tipe": tipe,
-            "induk": induk if induk != "— Tanpa induk —" else "",
-            "dk": dk,
-            "saldo": "-",
-            "kategori": kategori,
-            "sistem": False,
-            "aktif": aktif
-        }
-        database_user[email]['akun'].append(new_acc)
-        return redirect(url_for('daftar_akun'))
+        nama_brg_bersih = det.get('barang', '-')
         
-    user_akun_list = database_user[email]['akun']
+        opt_brg_html = '<option value="">-- Pilih Barang --</option>'
+        for b in list_barang:
+            b_str = f"{b.get('kode')} — {b.get('nama')}"
+            sel = "selected" if b_str == det.get('barang') else ""
+            opt_brg_html += f'<option value="{b_str}" data-harga="{b.get("harga_beli", b.get("harga_pokok", 0))}" {sel}>{b.get("kode")} {b.get("nama")}</option>'
+
+        rows_item_html += f"""
+        <tr>
+            <td>{r_num}</td>
+            <td>
+                <select name="item_barang[]" onchange="updateHargaBeli(this)" style="border:none; width:100%; background:transparent;">
+                    {opt_brg_html}
+                </select>
+            </td>
+            <td><input type="text" name="item_qty[]" value="{q_val}" oninput="hitungBaris(this)" style="border:none; width:100%; background:transparent; text-align:left;"></td>
+            <td><input type="text" name="item_harga[]" value="{h_val}" oninput="hitungBaris(this)" style="border:none; width:100%; background:transparent; text-align:right;"></td>
+            <td style="text-align: right;" class="col-jumlah">{j_val}</td>
+            <td style="text-align: center;"><a href="#" onclick="hapusBaris(this); return false;" style="color: #dc2626; text-decoration: none;">✕</a></td>
+        </tr>
+        """
+
+    total_trx_str = target_trx.get('total', '0')
+    subtotal_str = f"{int(target_trx.get('dpp', 0)):,.0f}".replace(',', '.') if target_trx.get('dpp') else total_trx_str
     
-    border_h = "1px solid #d1d5db"; bg_h = "#fff"; color_h = "#1f2937"; shadow_h = "none";
-    border_sh = "1px solid #d1d5db"; bg_sh = "#fff"; color_sh = "#1f2937"; shadow_sh = "none";
-    border_b = "1px solid #d18a99"; bg_b = "#fffafb"; color_b = "#d18a99"; shadow_b = "0 0 0 1px #d18a99";
-    
-    if default_level == 'Header':
-        border_h = "1px solid #d18a99"; bg_h = "#fffafb"; color_h = "#d18a99"; shadow_h = "0 0 0 1px #d18a99";
-        border_b = "1px solid #d1d5db"; bg_b = "#fff"; color_b = "#1f2937"; shadow_b = "none";
-    elif default_level == 'Sub Header':
-        border_sh = "1px solid #d18a99"; bg_sh = "#fffafb"; color_sh = "#d18a99"; shadow_sh = "0 0 0 1px #d18a99";
-        border_b = "1px solid #d1d5db"; bg_b = "#fff"; color_b = "#1f2937"; shadow_b = "none";
+    # Menghitung nilai komponen untuk jurnal
+    dpp_val = float(target_trx.get('dpp', 0) or 0)
+    ppn_val = float(target_trx.get('ppn', 0) or 0)
+    beban_angkut_val = float(target_trx.get('beban_angkut_nilai', 0) or 0)
+    persediaan_val = dpp_val + beban_angkut_val
+    total_val = dpp_val + ppn_val + beban_angkut_val
 
-    modal_content = f"""
-    <div class="modal-backdrop">
-        <div class="modal-box">
-            <div class="modal-header">
-                <div style="font-size: 18px; font-weight: bold; color: #1f2937;">Akun Baru</div>
-                <a href="/setup/akun" style="color: #6b7280; font-size: 20px; text-decoration: none; font-weight: bold;">✕</a>
+    formatted_persediaan = f"{int(persediaan_val):,.0f}".replace(',', '.')
+    formatted_ppn = f"{int(ppn_val):,.0f}".replace(',', '.') if ppn_val > 0 else ""
+    formatted_total_trx = f"{int(total_val):,.0f}".replace(',', '.')
+
+    ppn_persen_val = target_trx.get('ppn_persen', 0)
+    ppn_persen_str = f"{int(ppn_persen_val)}" if float(ppn_persen_val).is_integer() else (f"{ppn_persen_val}" if ppn_persen_val else "0")
+
+    diskon_nilai_val = target_trx.get('diskon_nilai', 0)
+    diskon_display_str = f"(Rp {int(diskon_nilai_val):,.0f})".replace(',', '.') if diskon_nilai_val and float(diskon_nilai_val) > 0 else "-"
+    is_saldo_awal = target_trx.get('is_saldo_awal', False)
+
+    bottom_journals_html = ""
+    if not is_saldo_awal:
+        # Baris PPN Masukan hanya akan muncul jika nilai PPN > 0
+        ppn_row_html = ""
+        if ppn_val > 0:
+            ppn_row_html = f"""
+                            <tr>
+                                <td>2-1500</td>
+                                <td>PPN Masukan</td>
+                                <td style="text-align: right;">{formatted_ppn}</td>
+                                <td style="text-align: right;"></td>
+                            </tr>
+            """
+
+        bottom_journals_html = f"""
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 25px;">
+            <div>
+                <div class="account-card" style="margin-bottom: 25px;">
+                    <div style="padding: 15px 20px; font-weight: 600; font-size: 14px; color: #1f2937; border-bottom: 1px solid #e5e7eb;">Jurnal</div>
+                    <table class="account-table">
+                        <thead>
+                            <tr>
+                                <th>KODE</th>
+                                <th>AKUN</th>
+                                <th style="text-align: right;">DEBIT</th>
+                                <th style="text-align: right;">KREDIT</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>1-1400</td>
+                                <td>Persediaan Barang Dagang</td>
+                                <td style="text-align: right;">{formatted_persediaan}</td>
+                                <td style="text-align: right;"></td>
+                            </tr>
+                            {ppn_row_html}
+                            <tr>
+                                <td>2-1100</td>
+                                <td>Utang Usaha</td>
+                                <td style="text-align: right;"></td>
+                                <td style="text-align: right;">{formatted_total_trx}</td>
+                            </tr>
+                            <tr style="background-color: #f9fafb; font-weight: 600;">
+                                <td colspan="2">Total</td>
+                                <td style="text-align: right;">{formatted_total_trx}</td>
+                                <td style="text-align: right;">{formatted_total_trx}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
-            <div class="modal-body">
-                <form action="/setup/akun/baru" method="POST" id="formAkunBaru">
-                    
-                    <input type="hidden" name="level_akun" id="input_level" value="{default_level}">
-                    
-                    <div class="form-group">
-                        <label>Level Akun</label>
-                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 6px;">
-                            <div id="card_header" onclick="selectLevel('Header', this)" style="border: {border_h}; background-color: {bg_h}; border-radius: 8px; padding: 12px; cursor: pointer; text-align: center; box-shadow: {shadow_h};">
-                                <div style="font-weight: 600; color: {color_h}; font-size: 13px;">Header</div>
-                                <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">Judul kelompok utama</div>
-                            </div>
-                            <div id="card_subheader" onclick="selectLevel('Sub Header', this)" style="border: {border_sh}; background-color: {bg_sh}; border-radius: 8px; padding: 12px; cursor: pointer; text-align: center; box-shadow: {shadow_sh};">
-                                <div style="font-weight: 600; color: {color_sh}; font-size: 13px;">Sub Header</div>
-                                <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">Kelompok di bawah</div>
-                            </div>
-                            <div id="card_biasa" onclick="selectLevel('Akun biasa', this)" style="border: {border_b}; background-color: {bg_b}; border-radius: 8px; padding: 12px; cursor: pointer; text-align: center; box-shadow: {shadow_b};">
-                                <div style="font-weight: 600; color: {color_b}; font-size: 13px;">Akun biasa</div>
-                                <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">Transaksi & saldo</div>
-                            </div>
-                        </div>
+
+            <div>
+                <div class="account-card" style="margin-bottom: 25px;">
+                    <div style="padding: 15px 20px; font-weight: 600; font-size: 14px; color: #1f2937; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center;">
+                        <span>Retur pembelian</span>
+                        <a href="/transaksi/retur-pembelian/baru" class="btn-action" style="padding: 4px 10px; font-size: 12px;">+ Buat retur</a>
                     </div>
-
-                    <div class="form-group">
-                        <label>Header (Kelompok Akun)</label>
-                        <select name="header_akun" id="select_header" onchange="updateKodeAkun()">
-                            <option value="1 — Aset">1 — Aset</option>
-                            <option value="2 — Liabilitas">2 — Liabilitas</option>
-                            <option value="3 — Ekuitas">3 — Ekuitas</option>
-                            <option value="4 — Pendapatan">4 — Pendapatan</option>
-                            <option value="5 — Harga Pokok Penjualan">5 — Harga Pokok Penjualan</option>
-                            <option value="6 — Beban Operasional">6 — Beban Operasional</option>
-                            <option value="8 — Pendapatan Lain-Lain">8 — Pendapatan Lain-Lain</option>
-                            <option value="9 — Beban Lain-Lain">9 — Beban Lain-Lain</option>
-                        </select>
-                        <div class="form-helper">Awalan nomor akun (1–9) menentukan kelompok utama akun.</div>
+                    <div style="padding: 30px; text-align: center; color: #6b7280; font-size: 13px;">
+                        Belum ada retur.
                     </div>
+                </div>
 
-                    <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 15px;" class="form-group">
-                        <div>
-                            <label>Kode Akun <span class="required">*</span></label>
-                            <input type="text" name="kode_akun" id="input_kode" value="1-" required>
-                            <div class="form-helper" id="helper_kode">Awalan harus '1'</div>
-                        </div>
-                        <div>
-                            <label>Nama Akun <span class="required">*</span></label>
-                            <input type="text" name="nama_akun" placeholder="mis. Kas Toko" required>
-                        </div>
+                <div class="account-card" style="margin-bottom: 25px;">
+                    <div style="padding: 15px 20px; font-weight: 600; font-size: 14px; color: #1f2937; border-bottom: 1px solid #e5e7eb;">Riwayat pelunasan</div>
+                    <div style="padding: 30px; text-align: center; color: #6b7280; font-size: 13px;">
+                        Belum ada pelunasan.
                     </div>
-
-                    <div class="form-group">
-                        <label>Tipe Akun (Sub Header / Subtipe)</label>
-                        <select name="tipe_akun">
-                            <option>Bank (Debit)</option>
-                            <option>Piutang (Debit)</option>
-                            <option>Aset Lancar (Debit)</option>
-                            <option>Aset Tetap (Debit)</option>
-                            <option>Aset Lancar Lainnya (Debit)</option>
-                            <option>Aset Lainnya (Debit)</option>
-                        </select>
-                    </div>
-
-                    <div class="form-group" style="display: flex; align-items: center; gap: 8px; margin-top: 10px;">
-                        <input type="checkbox" name="akun_aktif" checked style="width: 16px; height: 16px; accent-color: #d18a99;">
-                        <label style="margin-bottom: 0; font-weight: 400; color: #1f2937;">Aktif</label>
-                    </div>
-
-                    <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
-
-                    <div style="display: flex; justify-content: flex-end; gap: 10px;">
-                        <a href="/setup/akun" class="btn-batal">Batal</a>
-                        <button type="submit" class="btn-simpan">Simpan</button>
-                    </div>
-
-                </form>
+                </div>
             </div>
+        </div>
+        """
+    else:
+        bottom_journals_html = f"""
+        <div class="account-card" style="padding: 30px; text-align: center; color: #6b7280; font-size: 13px;">
+            Transaksi ini bersumber dari <strong>Saldo Awal Pemasok (Kartu Pemasok)</strong>.
+        </div>
+        """
+
+    content = f"""
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <div>
+                <div class="page-title" style="display: flex; align-items: center; gap: 10px;">
+                    Transaksi Pembelian {target_trx.get('nomor')} {"<span class='badge-saldo-awal'>Saldo Awal</span>" if is_saldo_awal else ""}
+                </div>
+                <div style="font-size: 13px; color: #6b7280; margin-top: 4px; display: flex; align-items: center; gap: 8px;">
+                    Status: <span class="badge-belum-lunas">{target_trx.get('status', 'Belum lunas')}</span> &nbsp; Sisa tagihan Rp {target_trx.get('sisa', formatted_total_trx)}
+                </div>
+            </div>
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <a href="/transaksi/pembelian" class="btn-action" style="padding: 8px 16px; font-weight: 500;">← Daftar</a>
+            <a href="/transaksi/pembelian/baru" class="btn-action" style="padding: 8px 16px; font-weight: 500; background: #fff; border-color: #d18a99; color: #d18a99;">+ Baru</a>
         </div>
     </div>
 
+    <div class="card-form" style="margin-bottom: 25px;">
+        <form action="/transaksi/pembelian/baru" method="POST" id="formPembelian">
+            <div style="display: grid; grid-template-columns: 1fr 2fr 1.5fr; gap: 20px;" class="form-group">
+                <div>
+                    <label>Tanggal <span class="required">*</span></label>
+                    <input type="date" name="tanggal" value="{target_trx.get('tanggal')}" required>
+                </div>
+                <div>
+                    <label>Pemasok (kode / nama) <span class="required">*</span></label>
+                    <select name="pemasok" required>{options_pemasok}</select>
+                </div>
+                <div>
+                    <label>No. bukti</label>
+                    <input type="text" name="no_faktur" value="{target_trx.get('nomor')}">
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 2fr 1.5fr; gap: 20px;" class="form-group">
+                <div>
+                    <label>Pembayaran</label>
+                    <select name="pembayaran">
+                        <option value="Kredit (dengan termin)" {"selected" if target_trx.get('pembayaran') != 'Tunai' else ""}>Kredit (dengan termin)</option>
+                        <option value="Tunai" {"selected" if target_trx.get('pembayaran') == 'Tunai' else ""}>Tunai</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Termin</label>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
+                        <input type="text" name="termin_pot" value="{target_trx.get('termin_pot', '')}" placeholder="-" style="text-align: center;">
+                        <input type="text" name="termin_hari" value="{target_trx.get('termin_hari', '')}" placeholder="-" style="text-align: center;">
+                        <input type="text" name="termin_jt" value="{target_trx.get('termin_jt', '30')}" style="text-align: center;">
+                    </div>
+                </div>
+                <div>
+                    <label>Memo</label>
+                    <input type="text" name="memo" value="{target_trx.get('memo', '')}" placeholder="Keterangan">
+                </div>
+            </div>
+
+            <div class="account-card" style="margin: 20px 0;">
+                <table class="account-table" id="tabelItem">
+                    <thead>
+                        <tr>
+                            <th style="width: 5%;">#</th>
+                            <th style="width: 45%;">Barang (kode / nama)</th>
+                            <th style="width: 15%;">Qty</th>
+                            <th style="width: 20%; text-align: right;">Harga beli</th>
+                            <th style="width: 15%; text-align: right;">Jumlah</th>
+                            <th style="width: 5%; text-align: center;"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbodyItem">{rows_item_html}</tbody>
+                </table>
+            </div>
+
+            <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px; margin-bottom: 25px; font-size: 13px;">
+                <div style="display: flex; width: 420px; justify-content: space-between; padding: 4px 0;">
+                    <span style="color: #6b7280;">Subtotal</span>
+                    <span id="displaySubtotal" style="font-weight: 600; min-width: 120px; text-align: right;">{subtotal_str}</span>
+                </div>
+                <div style="display: flex; width: 420px; justify-content: space-between; align-items: center; padding: 4px 0;">
+                    <span style="color: #6b7280;">Diskon dagang / rabat</span>
+                    <span id="displayDiskonNominal">{diskon_display_str}</span>
+                </div>
+                <div style="display: flex; width: 420px; justify-content: space-between; align-items: center; padding: 4px 0;">
+                    <span style="color: #6b7280;">PPN Masukan</span>
+                    <div style="display: flex; gap: 5px; align-items: center;">
+                        <input type="text" name="ppn_persen" value="{ppn_persen_str}" onfocus="if(this.value==='0') this.value='';" onblur="if(this.value==='') this.value='0';" style="width: 65px; padding: 4px; text-align: right; font-size: 12px;">
+                        <span>%</span>
+                    </div>
+                </div>
+                <div style="display: flex; width: 420px; justify-content: space-between; border-top: 2px solid #e5e7eb; padding-top: 10px; font-size: 15px; font-weight: bold; color: #1f2937;">
+                    <span>Total</span>
+                    <span id="displayTotal" style="min-width: 120px; text-align: right;">{formatted_total_trx}</span>
+                </div>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #e5e7eb; padding-top: 20px;">
+                <button type="button" class="btn-action btn-action-danger" style="padding: 10px 20px; font-weight: 500;">Hapus transaksi</button>
+                <button type="submit" class="btn-simpan" style="background-color: #d18a99; padding: 10px 28px;">Simpan perubahan</button>
+            </div>
+        </form>
+    </div>
+
+    {bottom_journals_html}
+    """
+    return render_dashboard_layout('pembelian', content)
+
+@app.route('/transaksi/retur-pembelian')
+def retur_pembelian():
+    if 'user_email' not in session:
+        return redirect(url_for('login'))
+    
+    email = session['user_email']
+    user_data = database_user.get(email, {})
+    list_retur = user_data.get('retur_pembelian', [])
+
+    if not list_retur:
+        table_retur_html = """
+        <div style="padding: 40px 20px; text-align: center; color: #6b7280; font-size: 13px;">
+            Tidak ada retur pada periode ini.
+        </div>
+        """
+        table_jurnal_retur_html = """
+        <div style="padding: 40px 20px; text-align: center; color: #6b7280; font-size: 13px;">
+            Belum ada jurnal pada periode ini.
+        </div>
+        """
+    else:
+        rows_r = ""
+        rows_jr = ""
+        tot_retur_nilai = 0
+        sum_persediaan = 0
+        sum_ppn_mas = 0
+        sum_utang = 0
+
+        for rt in list_retur:
+            tot_val = float(rt.get('total_retur', 0) or 0)
+            tot_retur_nilai += tot_val
+            sub_retur = float(rt.get('subtotal_retur', 0) or 0)
+            ppn_kor = float(rt.get('ppn_koreksi', 0) or 0)
+
+            sum_persediaan += sub_retur
+            sum_ppn_mas += ppn_kor
+            sum_utang += tot_val
+
+            detail_url = f"/transaksi/retur-pembelian/ubah/{rt.get('no_retur')}"
+            formatted_tot_val = f"{int(tot_val):,.0f}".replace(',', '.')
+            penyelesaian_display = rt.get('penyelesaian', 'Kurangi utang ke pemasok')
+
+            rows_r += f"""
+            <tr>
+                <td style="padding: 12px 20px;">{rt.get('tanggal_retur')}</td>
+                <td style="padding: 12px 20px;"><a href="{detail_url}" style="color: #d18a99; font-weight: 600; text-decoration: none;">{rt.get('no_retur')}</a></td>
+                <td style="padding: 12px 20px;">{rt.get('pemasok_nama')}</td>
+                <td style="padding: 12px 20px;"><a href="/transaksi/pembelian/ubah/{rt.get('faktur_asal')}" style="color: #d18a99; font-weight: 600; text-decoration: none;">{rt.get('faktur_asal')}</a></td>
+                <td style="padding: 12px 20px;"><span class="badge-belum-lunas">{penyelesaian_display}</span></td>
+                <td style="padding: 12px 20px; text-align: right;">{formatted_tot_val}</td>
+            </tr>
+            """
+
+            formatted_sub = f"{int(sub_retur):,.0f}".replace(',', '.') if sub_retur > 0 else '-'
+            formatted_ppn = f"{int(ppn_kor):,.0f}".replace(',', '.') if ppn_kor > 0 else '-'
+            formatted_tot = f"{int(tot_val):,.0f}".replace(',', '.') if tot_val > 0 else '-'
+
+            rows_jr += f"""
+            <tr>
+                <td style="padding: 12px 20px; white-space: nowrap;">{rt.get('tanggal_retur')}</td>
+                <td style="padding: 12px 20px;"><a href="{detail_url}" style="color: #d18a99; font-weight: 600; text-decoration: none;">{rt.get('no_retur')}</a></td>
+                <td style="padding: 12px 20px;">Retur pembelian - {rt.get('pemasok_nama')}</td>
+                <td style="padding: 12px 20px; text-align: right;">{formatted_tot}</td>
+                <td style="padding: 12px 20px; text-align: right;">{formatted_ppn}</td>
+                <td style="padding: 12px 20px; text-align: right;">{formatted_sub}</td>
+            </tr>
+            """
+
+        table_retur_html = f"""
+        <table class="account-table">
+            <thead>
+                <tr>
+                    <th style="width: 15%;">TANGGAL</th>
+                    <th style="width: 15%;">NO. RETUR</th>
+                    <th style="width: 25%;">PEMASOK</th>
+                    <th style="width: 15%;">FAKTUR ASAL</th>
+                    <th style="width: 15%;">PENYELESAIAN</th>
+                    <th style="width: 15%; text-align: right;">TOTAL</th>
+                </tr>
+            </thead>
+            <tbody>
+                {rows_r}
+                <tr style="background-color: #f9fafb; font-weight: 600;">
+                    <td colspan="5" style="padding: 12px 20px;">Total ({len(list_retur)} retur)</td>
+                    <td style="padding: 12px 20px; text-align: right;">{f"{int(tot_retur_nilai):,.0f}".replace(',', '.')}</td>
+                </tr>
+            </tbody>
+        </table>
+        """
+
+        table_jurnal_retur_html = f"""
+        <div style="overflow-x: auto;">
+        <table class="account-table" style="min-width: 950px;">
+            <thead>
+                <tr>
+                    <th rowspan="2" style="width: 12%; vertical-align: middle;">TANGGAL</th>
+                    <th rowspan="2" style="width: 15%; vertical-align: middle;">NO. BUKTI</th>
+                    <th rowspan="2" style="width: 33%; vertical-align: middle;">KETERANGAN</th>
+                    <th style="width: 13%; text-align: right; background: #f3f4f6;">Utang Usaha</th>
+                    <th style="width: 14%; text-align: right; background: #f3f4f6;">PPN Masukan</th>
+                    <th style="width: 13%; text-align: right; background: #f3f4f6;">Persediaan Barang Dagang</th>
+                </tr>
+                <tr>
+                    <th style="text-align: right; font-size: 10px; color: #047857;">DEBIT</th>
+                    <th style="text-align: right; font-size: 10px; color: #1d4ed8;">KREDIT</th>
+                    <th style="text-align: right; font-size: 10px; color: #1d4ed8;">KREDIT</th>
+                </tr>
+            </thead>
+            <tbody>
+                {rows_jr}
+                <tr style="background-color: #f9fafb; font-weight: 600;">
+                    <td colspan="3" style="padding: 12px 20px;">Total ({len(list_retur)} bukti)</td>
+                    <td style="padding: 12px 20px; text-align: right;">{f"{int(sum_utang):,.0f}".replace(',', '.')}</td>
+                    <td style="padding: 12px 20px; text-align: right;">{f"{int(sum_ppn_mas):,.0f}".replace(',', '.')}</td>
+                    <td style="padding: 12px 20px; text-align: right;">{f"{int(sum_persediaan):,.0f}".replace(',', '.')}</td>
+                </tr>
+            </tbody>
+        </table>
+        </div>
+        """
+
+    content = f"""
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
+        <div>
+            <div class="page-title">Retur Pembelian</div>
+            <div class="page-desc" style="margin-bottom: 0;">Barang dikembalikan ke pemasok: utang berkurang (atau uang kembali) dan barang keluar dari persediaan lewat akun Persediaan.</div>
+        </div>
+        <div>
+            <a href="/transaksi/retur-pembelian/baru" style="background-color: #d18a99; color: white; padding: 10px 18px; border-radius: 6px; font-size: 14px; font-weight: 500; text-decoration: none; display: inline-block;">+ Tambah Retur</a>
+        </div>
+    </div>
+
+    <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 15px 20px; margin-bottom: 25px; display: flex; align-items: center; gap: 15px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <input type="date" value="2026-01-01" style="padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+            <span style="font-size: 13px; color: #6b7280;">s.d.</span>
+            <input type="date" value="2026-10-31" style="padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+        </div>
+    </div>
+
+    <div class="account-card" style="margin-bottom: 25px;">{table_retur_html}</div>
+    <div class="account-card">
+        <div style="padding: 15px 20px; font-weight: 600; font-size: 15px; color: #1f2937; border-bottom: 1px solid #e5e7eb;">Jurnal Retur Pembelian</div>
+        {table_jurnal_retur_html}
+    </div>
+    """
+    return render_dashboard_layout('retur_pembelian', content)
+
+
+@app.route('/transaksi/retur-pembelian/baru', methods=['GET', 'POST'])
+def tambah_retur_pembelian():
+    if 'user_email' not in session:
+        return redirect(url_for('login'))
+    
+    email = session['user_email']
+    user_data = database_user.get(email, {})
+    list_pemasok = user_data.get('pemasok', [])
+    list_pembelian = user_data.get('pembelian', [])
+    list_barang = user_data.get('barang', [])
+    
+    if request.method == 'POST':
+        tanggal_retur = request.form.get('tanggal_retur')
+        pemasok_nama = request.form.get('pemasok_nama')
+        faktur_asal = request.form.get('faktur_asal')
+        no_retur = request.form.get('no_retur').strip()
+        if not no_retur:
+            no_retur = f"RB-{len(user_data.get('retur_pembelian', [])) + 1:02d}"
+        
+        penyelesaian = request.form.get('penyelesaian')
+        memo = request.form.get('memo', '')
+        
+        qty_retur_list = request.form.getlist('qty_retur[]')
+        ppn_retur_persen_raw = request.form.get('ppn_retur_persen', '0')
+        ppn_retur_persen = float(ppn_retur_persen_raw) if ppn_retur_persen_raw != '' and ppn_retur_persen_raw != '-' else 0.0
+
+        target_trx = None
+        for tr in list_pembelian:
+            if tr.get('nomor') == faktur_asal:
+                target_trx = tr
+                break
+
+        subtotal_retur = 0
+        retur_details = []
+
+        if target_trx and 'details' in target_trx:
+            for idx, det in enumerate(target_trx['details']):
+                q_ret = float(qty_retur_list[idx].replace('.', '') or 0) if idx < len(qty_retur_list) else 0
+                if q_ret > 0:
+                    harga_beli = float(det.get('harga', 0) or 0)
+                    subtotal_retur += (q_ret * harga_beli)
+                    retur_details.append({
+                        'barang': det.get('barang'),
+                        'qty_retur': q_ret,
+                        'harga': harga_beli,
+                        'jumlah': q_ret * harga_beli
+                    })
+
+                    # Kurangi stok barang di database user secara otomatis
+                    brg_str = det.get('barang', '')
+                    kode_brg_match = brg_str.split(' — ')[0].strip() if ' — ' in brg_str else brg_str.split(' - ')[0].strip()
+                    for b in list_barang:
+                        if b.get('kode') == kode_brg_match:
+                            stok_sekarang = float(b.get('qty_awal', 0) or 0)
+                            b['qty_awal'] = max(0, stok_sekarang - q_ret)
+                            break
+
+        ppn_koreksi = subtotal_retur * (ppn_retur_persen / 100)
+        total_retur = subtotal_retur + ppn_koreksi
+
+        if target_trx:
+            try:
+                sisa_lama = float(str(target_trx.get('sisa', target_trx.get('total'))).replace('.', '') or 0)
+                sisa_baru = max(0, sisa_lama - total_retur)
+                target_trx['sisa'] = f"{int(sisa_baru):,.0f}".replace(',', '.')
+                if sisa_baru == 0:
+                    target_trx['status'] = 'Lunas'
+            except:
+                pass
+
+        if 'retur_pembelian' not in database_user[email]:
+            database_user[email]['retur_pembelian'] = []
+
+        retur_obj = {
+            'no_retur': no_retur,
+            'tanggal_retur': tanggal_retur,
+            'pemasok_nama': pemasok_nama,
+            'faktur_asal': faktur_asal,
+            'penyelesaian': penyelesaian,
+            'memo': memo,
+            'ppn_retur_persen': ppn_retur_persen,
+            'subtotal_retur': subtotal_retur,
+            'ppn_koreksi': ppn_koreksi,
+            'total_retur': total_retur,
+            'details': retur_details
+        }
+
+        database_user[email]['retur_pembelian'].append(retur_obj)
+        return redirect(url_for('ubah_retur_pembelian_detail', no_retur=no_retur))
+
+    today_date = datetime.now().strftime('%Y-%m-%d')
+    today_indo = format_tanggal_pendek_indo(today_date)
+
+    options_pemasok = '<option value="">-- Pilih Pemasok --</option>'
+    for p in list_pemasok:
+        p_nama = p.get('nama')
+        options_pemasok += f'<option value="{p_nama}">{p.get("kode")} — {p_nama}</option>'
+
+    options_faktur = '<option value="">Pilih pemasok dulu</option>'
+    for tr in list_pembelian:
+        if not tr.get('is_saldo_awal', False):
+            options_faktur += f'<option value="{tr.get("nomor")}" data-pemasok="{tr.get("pemasok")}">{tr.get("nomor")} ({tr.get("tanggal_indo", tr.get("tanggal"))}) - Rp {tr.get("total")}</option>'
+
+    content = f"""
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
+        <div>
+            <div class="page-title">Tambah Retur Pembelian</div>
+            <div class="page-desc" style="margin-bottom: 0;">Pilih faktur asal, lalu isi qty barang yang dikembalikan. Nomor dibuat otomatis (RB-...) bila dikosongkan.</div>
+        </div>
+        <div>
+            <a href="/transaksi/retur-pembelian" class="btn-action" style="padding: 8px 16px; font-weight: 500;">← Daftar</a>
+        </div>
+    </div>
+
+    <div class="card-form" style="margin-bottom: 25px;">
+        <form action="/transaksi/retur-pembelian/baru" method="POST" id="formRetur">
+            <div style="display: grid; grid-template-columns: 1fr 1.5fr 1.5fr 1.2fr; gap: 20px;" class="form-group">
+                <div>
+                    <label>Tanggal retur <span class="required">*</span></label>
+                    <input type="text" name="tanggal_retur" value="{today_indo}" required>
+                </div>
+                <div>
+                    <label>Pemasok (kode / nama) <span class="required">*</span></label>
+                    <select name="pemasok_nama" id="selectPemasok" onchange="filterFaktur(); cekPemasokDipilih();" required>
+                        {options_pemasok}
+                    </select>
+                </div>
+                <div>
+                    <label>Faktur asal <span class="required">*</span></label>
+                    <select name="faktur_asal" id="selectFaktur" onchange="muatBarangFaktur(this)" disabled required style="background-color: #f3f4f6; cursor: not-allowed;">
+                        {options_faktur}
+                    </select>
+                </div>
+                <div>
+                    <label>No. retur</label>
+                    <input type="text" name="no_retur" placeholder="RB-otomatis">
+                    <span style="font-size: 11px; color: #6b7280;">Kosongkan = otomatis</span>
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 20px;" class="form-group">
+                <div>
+                    <label>Penyelesaian</label>
+                    <select name="penyelesaian">
+                        <option value="Kurangi utang ke pemasok">Kurangi utang ke pemasok</option>
+                        <option value="Terima kas/bank">Terima kas/bank</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Memo</label>
+                    <input type="text" name="memo" placeholder="Alasan retur (opsional)">
+                </div>
+            </div>
+
+            <div class="account-card" style="margin-top: 25px;">
+                <div style="padding: 15px 20px; font-weight: 600; font-size: 14px; color: #1f2937; border-bottom: 1px solid #e5e7eb;">Barang yang diretur</div>
+                <div id="containerBarangRetur" style="padding: 60px 20px; text-align: center; color: #6b7280; font-size: 13px;">
+                    Pilih pemasok dan faktur pembelian terlebih dahulu.
+                </div>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; align-items: center; border-top: 1px solid #e5e7eb; padding-top: 20px; margin-top: 30px;">
+                <button type="submit" class="btn-simpan" style="background-color: #d18a99; padding: 10px 28px;">Simpan retur</button>
+            </div>
+        </form>
+    </div>
+
     <script>
-        function selectLevel(level, el) {{
-            document.getElementById('input_level').value = level;
-            ['card_header', 'card_subheader', 'card_biasa'].forEach(id => {{
-                const card = document.getElementById(id);
-                card.style.border = "1px solid #d1d5db";
-                card.style.backgroundColor = "#fff";
-                card.style.color = "#1f2937";
-                card.style.boxShadow = "none";
-                card.querySelector('div').style.color = "#1f2937";
-            }});
-            el.style.border = "1px solid #d18a99";
-            el.style.backgroundColor = "#fffafb";
-            el.style.boxShadow = "0 0 0 1px #d18a99";
-            el.querySelector('div').style.color = "#d18a99";
+        const daftarPembelian = {json.dumps(list_pembelian)};
+
+        function cekPemasokDipilih() {{
+            const val = document.getElementById('selectPemasok').value.trim();
+            const selectFaktur = document.getElementById('selectFaktur');
+            if(val !== '') {{
+                selectFaktur.removeAttribute('disabled');
+                selectFaktur.style.backgroundColor = '#fff';
+                selectFaktur.style.cursor = 'pointer';
+            }} else {{
+                selectFaktur.setAttribute('disabled', 'true');
+                selectFaktur.style.backgroundColor = '#f3f4f6';
+                selectFaktur.style.cursor = 'not-allowed';
+                selectFaktur.value = '';
+                document.getElementById('containerBarangRetur').innerHTML = 'Pilih pemasok dan faktur pembelian terlebih dahulu.';
+            }}
         }}
 
-        function updateKodeAkun() {{
-            const headerVal = document.getElementById('select_header').value;
-            const prefix = headerVal.charAt(0);
-            const inputKode = document.getElementById('input_kode');
-            if(!inputKode.value.startsWith(prefix)) {{
-                inputKode.value = prefix + "-";
+        function filterFaktur() {{
+            const selectPemasokEl = document.getElementById('selectPemasok');
+            const namaPemasokMurni = selectPemasokEl.value.toLowerCase();
+            const select = document.getElementById('selectFaktur');
+            select.innerHTML = '<option value="">-- Pilih Faktur --</option>';
+            
+            daftarPembelian.forEach(tr => {{
+                if(tr.is_saldo_awal) return;
+                if(tr.pemasok.toLowerCase() === namaPemasokMurni) {{
+                    let opt = document.createElement('option');
+                    opt.value = tr.nomor;
+                    opt.textContent = tr.nomor + ' (' + tr.tanggal_indo + ') - Rp ' + tr.total;
+                    select.appendChild(opt);
+                }}
+            }});
+        }}
+
+        function muatBarangFaktur(selectEl) {{
+            const noFaktur = selectEl.value;
+            const container = document.getElementById('containerBarangRetur');
+            if(!noFaktur) {{
+                container.innerHTML = 'Pilih faktur pembelian untuk menampilkan barangnya.';
+                return;
             }}
-            document.getElementById('helper_kode').textContent = "Awalan harus '" + prefix + "'";
+
+            const trx = daftarPembelian.find(t => t.nomor === noFaktur);
+            if(!trx || !trx.details || trx.details.length === 0) {{
+                container.innerHTML = 'Tidak ada rincian barang pada faktur ini.';
+                return;
+            }}
+
+            let rowsHtml = '';
+            trx.details.forEach((det, idx) => {{
+                rowsHtml += `
+                <tr>
+                    <td>${{idx + 1}}</td>
+                    <td><strong>${{det.barang}}</strong></td>
+                    <td style="text-align: center;">${{det.qty}}</td>
+                    <td><input type="text" name="qty_retur[]" value="" data-harga="${{det.harga}}" oninput="hitungJumlahRetur(this)" style="width: 80px; padding: 4px; text-align: center;"></td>
+                    <td style="text-align: right;">Rp ${{det.harga.toLocaleString('id-ID')}}</td>
+                    <td style="text-align: right;" class="col-jumlah-retur">-</td>
+                </tr>
+                `;
+            }});
+
+            container.style.padding = '0';
+            container.innerHTML = `
+            <table class="account-table">
+                <thead>
+                    <tr>
+                        <th style="width: 5%;">#</th>
+                        <th style="width: 35%;">Barang</th>
+                        <th style="width: 12%; text-align: center;">Qty Beli</th>
+                        <th style="width: 15%; text-align: center;">Qty Retur</th>
+                        <th style="width: 16%; text-align: right;">Harga Beli</th>
+                        <th style="width: 17%; text-align: right;">Jumlah</th>
+                    </tr>
+                </thead>
+                <tbody>${{rowsHtml}}</tbody>
+            </table>
+            <div style="padding: 15px 20px; background: #f9fafb; border-top: 1px solid #e5e7eb; display: flex; flex-direction: column; align-items: flex-end; gap: 8px;">
+                <div style="display: flex; width: 350px; justify-content: space-between; align-items: center; font-size: 13px;">
+                    <span style="font-weight: 600; color: #374151;">PPN Masukan yang dikoreksi</span>
+                    <div style="display: flex; gap: 5px; align-items: center;">
+                        <input type="text" name="ppn_retur_persen" id="inputPpnReturPersen" value="0" onfocus="if(this.value==='0') this.value='';" onblur="if(this.value==='') this.value='0';" oninput="hitungJumlahRetur()" style="width: 60px; padding: 4px; text-align: right; font-size: 12px;">
+                        <span>%</span>
+                        <span id="displayPpnKoreksi" style="font-weight: 600; color: #1f2937; min-width: 90px; text-align: right;">-</span>
+                    </div>
+                </div>
+                <div style="display: flex; width: 350px; justify-content: space-between; align-items: center; font-size: 13px;">
+                    <span style="font-weight: 600; color: #374151;">Total Retur</span>
+                    <span id="displayTotalRetur" style="font-weight: bold; color: #1f2937; min-width: 90px; text-align: right;">-</span>
+                </div>
+            </div>
+            `;
+        }}
+
+        function hitungJumlahRetur(inputEl) {{
+            if (inputEl) {{
+                const row = inputEl.closest('tr');
+                const qtyRetur = parseFloat(inputEl.value.replace(/\./g, '')) || 0;
+                const hargaBeli = parseFloat(inputEl.getAttribute('data-harga')) || 0;
+                const totalJumlah = qtyRetur * hargaBeli;
+                const colJumlah = row.querySelector('.col-jumlah-retur');
+                colJumlah.textContent = qtyRetur > 0 ? 'Rp ' + totalJumlah.toLocaleString('id-ID') : '-';
+            }}
+
+            let subtotalRetur = 0;
+            document.querySelectorAll('#containerBarangRetur tr').forEach(r => {{
+                const inp = r.querySelector('input[name="qty_retur[]"]');
+                if (inp) {{
+                    const q = parseFloat(inp.value.replace(/\./g, '')) || 0;
+                    const h = parseFloat(inp.getAttribute('data-harga')) || 0;
+                    subtotalRetur += (q * h);
+                }}
+            }});
+
+            const ppnPersenInput = document.getElementById('inputPpnReturPersen');
+            const ppnVal = ppnPersenInput ? ppnPersenInput.value.trim() : '0';
+            const ppnPersen = (ppnVal === '' || ppnVal === '-') ? 0 : (parseFloat(ppnVal.replace(/\./g, '')) || 0);
+            
+            const ppnKoreksi = subtotalRetur * (ppnPersen / 100);
+            const totalRetur = subtotalRetur + ppnKoreksi;
+            
+            const elPpn = document.getElementById('displayPpnKoreksi');
+            const elTotal = document.getElementById('displayTotalRetur');
+            
+            if (subtotalRetur > 0) {{
+                elPpn.textContent = ppnKoreksi > 0 ? 'Rp ' + Math.round(ppnKoreksi).toLocaleString('id-ID') : '-';
+                elTotal.textContent = 'Rp ' + Math.round(totalRetur).toLocaleString('id-ID');
+            }} else {{
+                elPpn.textContent = '-';
+                elTotal.textContent = '-';
+            }}
         }}
     </script>
     """
-    
-    session['modal_akun'] = modal_content
-    return redirect(url_for('daftar_akun'))
+    return render_dashboard_layout('retur_pembelian', content)
 
-@app.route('/setup/akun/ubah/<path:kode>', methods=['GET', 'POST'])
-def ubah_akun(kode):
+
+@app.route('/transaksi/retur-pembelian/ubah/<path:no_retur>')
+def ubah_retur_pembelian_detail(no_retur):
+    if 'user_email' not in session:
+        return redirect(url_for('login'))
+    
+    email = session['user_email']
+    user_data = database_user.get(email, {})
+    list_retur = user_data.get('retur_pembelian', [])
+    
+    target_retur = None
+    for rt in list_retur:
+        if rt.get('no_retur') == no_retur:
+            target_retur = rt
+            break
+            
+    if not target_retur:
+        return redirect(url_for('retur_pembelian'))
+
+    sub_retur = float(target_retur.get('subtotal_retur', 0) or 0)
+    ppn_kor = float(target_retur.get('ppn_koreksi', 0) or 0)
+    tot_retur = float(target_retur.get('total_retur', 0) or 0)
+
+    formatted_sub = f"{int(sub_retur):,.0f}".replace(',', '.') if sub_retur > 0 else '0'
+    formatted_ppn = f"{int(ppn_kor):,.0f}".replace(',', '.') if ppn_kor > 0 else '0'
+    formatted_tot = f"{int(tot_retur):,.0f}".replace(',', '.') if tot_retur > 0 else '0'
+
+    ppn_row_html = ""
+    if ppn_kor > 0:
+        ppn_row_html = f"""
+                <tr>
+                    <td>2-1500</td>
+                    <td>PPN Masukan</td>
+                    <td style="text-align: right;"></td>
+                    <td style="text-align: right;">{formatted_ppn}</td>
+                </tr>
+        """
+
+    content = f"""
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
+        <div>
+            <div class="page-title">Retur Pembelian {target_retur.get('no_retur')}</div>
+            <div style="font-size: 13px; color: #6b7280; margin-top: 4px;">
+                Faktur Asal: <strong>{target_retur.get('faktur_asal')}</strong> | Pemasok: <strong>{target_retur.get('pemasok_nama')}</strong>
+            </div>
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <a href="/transaksi/retur-pembelian" class="btn-action" style="padding: 8px 16px; font-weight: 500;">← Daftar</a>
+        </div>
+    </div>
+
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
+        <a href="#" class="btn-action btn-action-danger" style="padding: 10px 20px; font-weight: 500;">Hapus retur</a>
+        <button type="button" class="btn-simpan" style="background-color: #d18a99; padding: 10px 28px;">Simpan perubahan</button>
+    </div>
+
+    <div class="account-card" style="margin-bottom: 25px;">
+        <div style="padding: 15px 20px; font-weight: 600; font-size: 14px; color: #1f2937; border-bottom: 1px solid #e5e7eb;">Jurnal retur pembelian</div>
+        <table class="account-table">
+            <thead>
+                <tr>
+                    <th style="width: 15%;">KODE</th>
+                    <th style="width: 45%;">AKUN</th>
+                    <th style="width: 20%; text-align: right;">DEBIT</th>
+                    <th style="width: 20%; text-align: right;">KREDIT</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>2-1100</td>
+                    <td>Utang Usaha</td>
+                    <td style="text-align: right;">{formatted_tot}</td>
+                    <td style="text-align: right;"></td>
+                </tr>
+                {ppn_row_html}
+                <tr>
+                    <td>1-1400</td>
+                    <td>Persediaan Barang Dagang</td>
+                    <td style="text-align: right;"></td>
+                    <td style="text-align: right;">{formatted_sub}</td>
+                </tr>
+                <tr style="background-color: #f9fafb; font-weight: 600;">
+                    <td colspan="2">Total</td>
+                    <td style="text-align: right;">{formatted_tot}</td>
+                    <td style="text-align: right;">{formatted_tot}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    """
+    return render_dashboard_layout('retur_pembelian', content)
+
+@app.route('/transaksi/pengeluaran-kas', methods=['GET', 'POST'])
+def pengeluaran_kas():
+    if 'user_email' not in session:
+        return redirect(url_for('login'))
+    
+    email = session['user_email']
+    user_data = database_user.get(email, {})
+    list_pemasok = user_data.get('pemasok', [])
+    list_akun = user_data.get('akun', DEFAULT_AKUN)
+    list_pembelian = user_data.get('pembelian', [])
+    list_pengeluaran = user_data.get('pengeluaran_kas', [])
+
+    active_tab = request.args.get('tab', 'pembayaran') # 'pembayaran' atau 'lain'
+
+    if request.method == 'POST':
+        jenis_transaksi = request.form.get('jenis_transaksi', 'pembayaran')
+        tanggal = request.form.get('tanggal')
+        akun_kas_input = request.form.get('akun_kas')
+        no_bukti = request.form.get('no_bukti', '').strip()
+        memo_utama = request.form.get('memo', '').strip()
+        
+        nama_akun_kas_bersih = akun_kas_input.split(' - ')[1] if ' - ' in akun_kas_input else akun_kas_input
+
+        if jenis_transaksi == 'pembayaran':
+            pemasok = request.form.get('pemasok')
+            if not no_bukti:
+                no_bukti = f"BKK-{len(list_pengeluaran) + 1:03d}"
+            
+            jumlah_dibayar = float(request.form.get('jumlah_dibayar', '0').replace('.', '') or 0)
+            potongan = float(request.form.get('potongan', '0').replace('.', '') or 0)
+            
+            faktur_terpilih = request.form.getlist('faktur_terpilih[]')
+            bayar_list = request.form.getlist('bayar_alokasi[]')
+
+            alokasi_faktur = []
+            for idx, fak_no in enumerate(faktur_terpilih):
+                val_bayar = float(bayar_list[idx].replace('.', '') or 0) if idx < len(bayar_list) else 0
+                if val_bayar > 0:
+                    alokasi_faktur.append(fak_no)
+                    for tr in list_pembelian:
+                        if tr.get('nomor') == fak_no:
+                            try:
+                                sisa_lama = float(str(tr.get('sisa', tr.get('total'))).replace('.', '') or 0)
+                                total_hapus = val_bayar + (potongan / len(faktur_terpilih) if potongan > 0 else 0)
+                                sisa_baru = max(0, sisa_lama - total_hapus)
+                                tr['sisa'] = f"{int(sisa_baru):,.0f}".replace(',', '.')
+                                if sisa_baru == 0:
+                                    tr['status'] = 'Lunas'
+                                else:
+                                    tr['status'] = 'Sebagian'
+                            except:
+                                pass
+
+            total_pengaruh_utang = jumlah_dibayar + potongan
+            for acc in list_akun:
+                acc_str = f"{acc.get('kode')} — {acc.get('nama')}"
+                if acc_str == akun_kas_input or acc.get('kode') in akun_kas_input:
+                    try:
+                        saldo_lama = float(str(acc.get('saldo', '0')).replace('.', '') or 0)
+                        acc['saldo'] = f"{int(saldo_lama - jumlah_dibayar):,.0f}".replace(',', '.')
+                    except:
+                        pass
+                if 'Utang Usaha' in acc.get('nama'):
+                    try:
+                        saldo_utang = float(str(acc.get('saldo', '0')).replace('.', '') or 0)
+                        acc['saldo'] = f"{int(max(0, saldo_utang - total_pengaruh_utang)):,.0f}".replace(',', '.')
+                    except:
+                        pass
+
+            keterangan_final = memo_utama if memo_utama else f"Pembayaran utang - {pemasok}"
+
+            pengeluaran_obj = {
+                'jenis': 'pembayaran',
+                'no_bukti': no_bukti,
+                'tanggal': tanggal,
+                'kepada': pemasok,
+                'akun_kas': nama_akun_kas_bersih,
+                'akun_tabel': 'Utang Usaha',
+                'memo': keterangan_final,
+                'jumlah_pembayaran': jumlah_dibayar,
+                'potongan': potongan,
+                'debit_akun': 'Utang Usaha',
+                'alokasi': alokasi_faktur
+            }
+            user_data.setdefault('pengeluaran_kas', []).append(pengeluaran_obj)
+            return redirect(url_for('pengeluaran_kas', tab='pembayaran'))
+
+        else:
+            # Pengeluaran Lain
+            if not no_bukti:
+                no_bukti = f"BKK-Lain-{len(list_pengeluaran) + 1:03d}"
+            
+            dibayar_kepada = request.form.get('dibayar_kepada', '-')
+            akun_baris = request.form.getlist('akun_baris[]')
+            jumlah_baris = request.form.getlist('jumlah_baris[]')
+            keterangan_baris = request.form.getlist('keterangan_baris[]')
+
+            total_jumlah_lain = 0
+            detail_item_lain = []
+            akun_debit_list = []
+
+            for idx, ak in enumerate(akun_baris):
+                if ak and idx < len(jumlah_baris):
+                    val_jml = float(jumlah_baris[idx].replace('.', '') or 0)
+                    if val_jml > 0:
+                        total_jumlah_lain += val_jml
+                        nama_akun_lawan = ak.split(' — ')[1] if ' — ' in ak else (ak.split(' - ')[1] if ' - ' in ak else ak)
+                        akun_debit_list.append(nama_akun_lawan)
+                        detail_item_lain.append({
+                            'akun': nama_akun_lawan,
+                            'jumlah': val_jml,
+                            'keterangan': keterangan_baris[idx] if idx < len(keterangan_baris) else ''
+                        })
+
+            for acc in list_akun:
+                acc_str = f"{acc.get('kode')} — {acc.get('nama')}"
+                if acc_str == akun_kas_input or acc.get('kode') in akun_kas_input:
+                    try:
+                        saldo_lama = float(str(acc.get('saldo', '0')).replace('.', '') or 0)
+                        acc['saldo'] = f"{int(saldo_lama - total_jumlah_lain):,.0f}".replace(',', '.')
+                    except:
+                        pass
+
+            keterangan_final = memo_utama if memo_utama else f"Pengeluaran lain kepada {dibayar_kepada}"
+            str_akun_debit = ", ".join(akun_debit_list)
+
+            pengeluaran_obj = {
+                'jenis': 'lain',
+                'no_bukti': no_bukti,
+                'tanggal': tanggal,
+                'kepada': dibayar_kepada,
+                'akun_kas': nama_akun_kas_bersih,
+                'akun_tabel': str_akun_debit,
+                'memo': keterangan_final,
+                'jumlah_pembayaran': total_jumlah_lain,
+                'potongan': 0,
+                'debit_akun': str_akun_debit,
+                'detail_lain': detail_item_lain
+            }
+            user_data.setdefault('pengeluaran_kas', []).append(pengeluaran_obj)
+            return redirect(url_for('pengeluaran_kas', tab='lain'))
+
+    today_date = datetime.now().strftime('%Y-%m-%d')
+    current_date_formatted = datetime.now().strftime('%d %b %Y')
+
+    # Dropdown Pemasok
+    options_pemasok = '<option value="">ketik kode atau nama...</option>'
+    for p in list_pemasok:
+        p_nama = p.get('nama')
+        options_pemasok += f'<option value="{p_nama}">{p.get("kode")} — {p_nama}</option>'
+
+    # Dropdown Akun Kas / Bank / Kas Kecil
+    options_akun_kas = ""
+    for acc in list_akun:
+        if acc.get('kategori') == '1 — Aset' and ('Kas' in acc.get('nama') or 'Bank' in acc.get('nama')):
+            selected = 'selected' if '1-1100' in acc.get('kode') else ''
+            options_akun_kas += f'<option value="{acc.get("kode")} — {acc.get("nama")}" {selected}>{acc.get("kode")} — {acc.get("nama")}</option>'
+
+    # Dropdown Semua Akun untuk Pengeluaran Lain (Kecuali akun kontrol Piutang, Utang, Persediaan)
+    options_semua_akun = '<option value="">-- Pilih Akun --</option>'
+    for acc in list_akun:
+        nama_acc = acc.get('nama', '')
+        if not any(k in nama_acc for k in ['Piutang', 'Utang', 'Persediaan']):
+            options_semua_akun += f'<option value="{acc.get("kode")} — {nama_acc}">{acc.get("kode")} — {nama_acc}</option>'
+
+    # Render Tabel Daftar & Jurnal
+    if not list_pengeluaran:
+        table_pengeluaran_html = '<div style="padding: 40px 20px; text-align: center; color: #6b7280; font-size: 13px;">Belum ada data pada periode ini.</div>'
+        table_jurnal_html = '<div style="padding: 40px 20px; text-align: center; color: #6b7280; font-size: 13px;">Belum ada jurnal pada periode ini.</div>'
+    else:
+        rows_pk = ""
+        rows_jpk = ""
+        sum_kas_kredit = 0
+        sum_pot_kredit = 0
+        sum_debit_total = 0
+
+        for pk in list_pengeluaran:
+            val_jumlah = float(pk.get('jumlah_pembayaran', 0) or 0)
+            val_potongan = float(pk.get('potongan', 0) or 0)
+            total_debit = val_jumlah + val_potongan
+
+            sum_kas_kredit += val_jumlah
+            sum_pot_kredit += val_potongan
+            sum_debit_total += total_debit
+
+            tgl_raw = pk.get('tanggal', '')
+            try:
+                dt_obj = datetime.strptime(tgl_raw, '%Y-%m-%d')
+                months_id = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agt', 'Sep', 'Okt', 'Nov', 'Des']
+                tgl_formatted = f"{dt_obj.day} {months_id[dt_obj.month]} {dt_obj.year}"
+            except:
+                tgl_formatted = tgl_raw
+
+            formatted_jumlah = f"{int(val_jumlah):,.0f}".replace(',', '.')
+            formatted_potongan = f"{int(val_potongan):,.0f}".replace(',', '.') if val_potongan > 0 else '-'
+            formatted_debit = f"{int(total_debit):,.0f}".replace(',', '.')
+
+            rows_pk += f"""
+            <tr>
+                <td style="padding: 12px 16px;">{tgl_formatted}</td>
+                <td style="padding: 12px 16px; font-weight: 600; color: #d18a99;">{pk.get('no_bukti')}</td>
+                <td style="padding: 12px 16px;">{pk.get('kepada')}</td>
+                <td style="padding: 12px 16px; font-weight: 500; color: #374151;">{pk.get('akun_tabel')}</td>
+                <td style="padding: 12px 16px;">{pk.get('akun_kas')}</td>
+                <td style="padding: 12px 16px; text-align: right; font-weight: 600; color: #047857;">{formatted_jumlah}</td>
+                <td style="padding: 12px 16px; text-align: right;">{formatted_potongan}</td>
+            </tr>
+            """
+
+            rows_jpk += f"""
+            <tr>
+                <td style="padding: 12px 16px;">{tgl_formatted}</td>
+                <td style="padding: 12px 16px; font-weight: 600; color: #d18a99;">{pk.get('no_bukti')}</td>
+                <td style="padding: 12px 16px;">{pk.get('memo')}</td>
+                <td style="padding: 12px 16px; text-align: right; font-weight: 600; color: #b45309;">{pk.get('debit_akun')}</td>
+                <td style="padding: 12px 16px; text-align: right;">{formatted_debit}</td>
+                <td style="padding: 12px 16px; text-align: right;">{f"{int(val_potongan):,.0f}".replace(',', '.') if val_potongan > 0 else '-'}</td>
+                <td style="padding: 12px 16px; text-align: right;">{formatted_jumlah}</td>
+            </tr>
+            """
+
+        table_pengeluaran_html = f"""
+        <table class="account-table">
+            <thead>
+                <tr>
+                    <th>TANGGAL</th>
+                    <th>NO. BUKTI</th>
+                    <th>KEPADA</th>
+                    <th>AKUN</th>
+                    <th>AKUN KAS</th>
+                    <th style="text-align: right;">JUMLAH</th>
+                    <th style="text-align: right;">POTONGAN</th>
+                </tr>
+            </thead>
+            <tbody>{rows_pk}</tbody>
+        </table>
+        """
+
+        table_jurnal_html = f"""
+        <div style="overflow-x: auto;">
+        <table class="account-table" style="min-width: 950px;">
+            <thead>
+                <tr>
+                    <th rowspan="2" style="vertical-align: middle;">TANGGAL</th>
+                    <th rowspan="2" style="vertical-align: middle;">NO. BUKTI</th>
+                    <th rowspan="2" style="vertical-align: middle;">KETERANGAN</th>
+                    <th rowspan="2" style="text-align: right; vertical-align: middle; background: #fef3c7;">AKUN DEBIT</th>
+                    <th style="text-align: right; background: #f3f4f6;">Jumlah Debit</th>
+                    <th style="text-align: right; background: #f3f4f6;">Potongan Pembelian</th>
+                    <th style="text-align: right; background: #f3f4f6;">Kas / Bank</th>
+                </tr>
+                <tr>
+                    <th style="text-align: right; font-size: 10px; color: #b45309;">DEBIT</th>
+                    <th style="text-align: right; font-size: 10px; color: #047857;">KREDIT</th>
+                    <th style="text-align: right; font-size: 10px; color: #047857;">KREDIT</th>
+                </tr>
+            </thead>
+            <tbody>
+                {rows_jpk}
+                <tr style="background-color: #f9fafb; font-weight: 600;">
+                    <td colspan="4" style="padding: 12px 16px;">Total ({len(list_pengeluaran)} bukti)</td>
+                    <td style="padding: 12px 16px; text-align: right;">{f"{int(sum_debit_total):,.0f}".replace(',', '.')}</td>
+                    <td style="padding: 12px 16px; text-align: right;">{f"{int(sum_pot_kredit):,.0f}".replace(',', '.') if sum_pot_kredit > 0 else '-'}</td>
+                    <td style="padding: 12px 16px; text-align: right;">{f"{int(sum_kas_kredit):,.0f}".replace(',', '.')}</td>
+                </tr>
+            </tbody>
+        </table>
+        </div>
+        """
+
+    # Form Content Berdasarkan Tab Aktif
+    if active_tab == 'pembayaran':
+        form_tab_content = f"""
+        <input type="hidden" name="jenis_transaksi" value="pembayaran">
+        <div style="font-size: 15px; font-weight: 600; color: #1f2937; margin-bottom: 15px;">Pembayaran utang baru</div>
+        <div style="display: grid; grid-template-columns: 1fr 2fr 1.5fr 1fr; gap: 20px; margin-bottom: 20px;" class="form-group">
+            <div>
+                <label style="font-size: 13px; color: #374151; font-weight: 500;">Tanggal <span style="color: #ef4444;">*</span></label>
+                <input type="date" name="tanggal" id="inputTanggalEK" value="{today_date}" onchange="hitungDiskonTerminOtomatis()" style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+            </div>
+            <div>
+                <label style="font-size: 13px; color: #374151; font-weight: 500;">Pemasok (kode / nama) <span style="color: #ef4444;">*</span></label>
+                <select name="pemasok" id="selectPemasokEK" onchange="muatTagihanPemasok(this)" style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; background: white;" required>
+                    {options_pemasok}
+                </select>
+            </div>
+            <div>
+                <label style="font-size: 13px; color: #374151; font-weight: 500;">Bayar dari akun <span style="color: #ef4444;">*</span></label>
+                <select name="akun_kas" style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; background: white;" required>
+                    {options_akun_kas}
+                </select>
+            </div>
+            <div>
+                <label style="font-size: 13px; color: #374151; font-weight: 500;">No. bukti</label>
+                <input type="text" name="no_bukti" placeholder="BKK-otomatis" style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+                <span style="font-size: 11px; color: #6b7280; margin-top: 2px; display: block;">Kosong = otomatis</span>
+            </div>
+        </div>
+
+        <!-- 3 KOTAK DI BAWAH PEMASOK -->
+        <div id="wrapperDetailPemasok" style="display: none;">
+            <div style="display: grid; grid-template-columns: 220px 1fr 1fr 200px; gap: 20px; align-items: start; background: #fdf2f4; border: 1px solid #fce7ec; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+                <div style="background: white; padding: 12px; border-radius: 6px; border: 1px solid #f5d0d8;">
+                    <div style="font-size: 11px; color: #6b7280;">Sisa utang per {current_date_formatted}</div>
+                    <div id="labelSisaUtangTotal" style="font-size: 18px; font-weight: 700; color: #1f2937; margin-top: 4px;">Rp 0</div>
+                </div>
+                <div>
+                    <label style="font-size: 13px; color: #374151; font-weight: 500;">Jumlah dibayar <span style="color: #ef4444;">*</span></label>
+                    <input type="text" name="jumlah_dibayar" id="inputJumlahDibayar" value="0" placeholder="0" oninput="formatRupiahEK(this)" style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; background: white;">
+                </div>
+                <div>
+                    <label style="font-size: 13px; color: #374151; font-weight: 500;">Potongan</label>
+                    <input type="text" name="potongan" id="inputPotonganEK" value="0" placeholder="0" oninput="formatRupiahEK(this)" style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; background: white;">
+                    <div style="font-size: 11px; color: #6b7280; margin-top: 3px;">Otomatis: diskon termin untuk faktur yang lunas dalam masa diskon</div>
+                </div>
+                <div style="padding-top: 22px;">
+                    <button type="button" onclick="lunasiSeluruhUtang()" style="background: white; border: 1px solid #d18a99; color: #d18a99; padding: 8px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; width: 100%;">Lunasi seluruh utang</button>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <label style="font-size: 13px; color: #374151; font-weight: 500;">Memo (Keterangan)</label>
+                <input type="text" name="memo" placeholder="Kosongkan jika ingin otomatis" style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+            </div>
+
+            <!-- TABEL ALOKASI FAKTUR PEMBELIAN -->
+            <div style="border: 1px solid #e5e7eb; border-radius: 8px; margin-top: 15px; background: white;">
+                <div style="padding: 12px 16px; background: #f9fafb; font-size: 13px; font-weight: 500; color: #374151; border-bottom: 1px solid #e5e7eb;">
+                    Alokasi faktur (klik baris untuk memilih faktur tertentu)
+                </div>
+                <div id="containerTagihanPemasok" style="padding: 40px 20px; text-align: center; color: #6b7280; font-size: 13px;">
+                    Pilih pemasok untuk melihat sisa utang.
+                </div>
+            </div>
+            <div style="font-size: 12px; color: #6b7280; margin-top: 12px;">
+                Cukup isi jumlah yang dibayar: saldo utang pemasok berkurang, dan pembayaran otomatis dicatat ke transaksi terlama lebih dulu (termasuk transaksi bulan sebelumnya).
+            </div>
+        </div>
+        """
+    else:
+        form_tab_content = f"""
+        <input type="hidden" name="jenis_transaksi" value="lain">
+        <div style="font-size: 15px; font-weight: 600; color: #1f2937; margin-bottom: 15px;">Pengeluaran kas lain baru</div>
+        <div style="display: grid; grid-template-columns: 1fr 2fr 2fr 1fr; gap: 20px; margin-bottom: 20px;" class="form-group">
+            <div>
+                <label style="font-size: 13px; color: #374151; font-weight: 500;">Tanggal <span style="color: #ef4444;">*</span></label>
+                <input type="date" name="tanggal" value="{today_date}" style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;" required>
+            </div>
+            <div>
+                <label style="font-size: 13px; color: #374151; font-weight: 500;">Keluar dari akun <span style="color: #ef4444;">*</span></label>
+                <select name="akun_kas" style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; background: white;" required>
+                    {options_akun_kas}
+                </select>
+            </div>
+            <div>
+                <label style="font-size: 13px; color: #374151; font-weight: 500;">Dibayar kepada</label>
+                <input type="text" name="dibayar_kepada" placeholder="Penerima pengeluaran" style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+            </div>
+            <div>
+                <label style="font-size: 13px; color: #374151; font-weight: 500;">No. bukti</label>
+                <input type="text" name="no_bukti" placeholder="BKK-otomatis" style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+                <span style="font-size: 11px; color: #6b7280; margin-top: 2px; display: block;">Kosong = otomatis</span>
+            </div>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+            <label style="font-size: 13px; color: #374151; font-weight: 500;">Memo</label>
+            <input type="text" name="memo" placeholder="Keterangan" style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+        </div>
+
+        <!-- TABEL BARIS PENGELUARAN LAIN -->
+        <div style="border: 1px solid #e5e7eb; border-radius: 8px; background: white; overflow: hidden; margin-top: 20px;">
+            <table class="account-table" style="margin-bottom: 0;">
+                <thead>
+                    <tr>
+                        <th style="width: 6%;">#</th>
+                        <th style="width: 44%;">Akun (kode / nama)</th>
+                        <th style="width: 20%; text-align: right;">Jumlah</th>
+                        <th style="width: 24%;">Keterangan</th>
+                        <th style="width: 6%; text-align: center;"></th>
+                    </tr>
+                </thead>
+                <tbody id="tbodyPengeluaranLain">
+                    <tr>
+                        <td style="padding: 10px 16px; text-align: center; color: #6b7280;">1</td>
+                        <td style="padding: 10px 16px;">
+                            <select name="akun_baris[]" style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; background: white;">
+                                {options_semua_akun}
+                            </select>
+                        </td>
+                        <td style="padding: 10px 16px;">
+                            <input type="text" name="jumlah_baris[]" value="" placeholder="0" oninput="formatRupiahEK(this)" style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; text-align: right;">
+                        </td>
+                        <td style="padding: 10px 16px;">
+                            <input type="text" name="keterangan_baris[]" value="" placeholder="Keterangan baris" style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px;">
+                        </td>
+                        <td style="padding: 10px 16px; text-align: center;">
+                            <button type="button" onclick="hapusBarisLainEK(this)" style="background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 16px;">×</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 10px 16px; text-align: center; color: #6b7280;">2</td>
+                        <td style="padding: 10px 16px;">
+                            <select name="akun_baris[]" style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; background: white;">
+                                {options_semua_akun}
+                            </select>
+                        </td>
+                        <td style="padding: 10px 16px;">
+                            <input type="text" name="jumlah_baris[]" value="" placeholder="0" oninput="formatRupiahEK(this)" style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; text-align: right;">
+                        </td>
+                        <td style="padding: 10px 16px;">
+                            <input type="text" name="keterangan_baris[]" value="" placeholder="Keterangan baris" style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px;">
+                        </td>
+                        <td style="padding: 10px 16px; text-align: center;">
+                            <button type="button" onclick="hapusBarisLainEK(this)" style="background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 16px;">×</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 10px 16px; text-align: center; color: #6b7280;">3</td>
+                        <td style="padding: 10px 16px;">
+                            <select name="akun_baris[]" style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; background: white;">
+                                {options_semua_akun}
+                            </select>
+                        </td>
+                        <td style="padding: 10px 16px;">
+                            <input type="text" name="jumlah_baris[]" value="" placeholder="0" oninput="formatRupiahEK(this)" style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; text-align: right;">
+                        </td>
+                        <td style="padding: 10px 16px;">
+                            <input type="text" name="keterangan_baris[]" value="" placeholder="Keterangan baris" style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px;">
+                        </td>
+                        <td style="padding: 10px 16px; text-align: center;">
+                            <button type="button" onclick="hapusBarisLainEK(this)" style="background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 16px;">×</button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+            <div style="padding: 10px 16px; background: #f9fafb; border-top: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center;">
+                <button type="button" onclick="tambahBarisLainEK()" style="background: none; border: none; color: #d18a99; font-weight: 600; font-size: 13px; cursor: pointer;">+ Tambah baris</button>
+                <span style="font-size: 11px; color: #6b7280;">Enter/↓ bawah · ↑ atas · Tab kanan · Esc batal · Ctrl+V tempel dari Excel</span>
+            </div>
+        </div>
+        <div style="font-size: 12px; color: #6b7280; margin-top: 12px;">
+            Akun kontrol (Piutang, Utang, Persediaan) tidak dapat dipakai di sini — gunakan menu penjualan, pembelian, atau pelunasan. Jurnal: Dr akun-akun lawan / Cr Kas.
+        </div>
+        """
+
+    content = f"""
+    <div style="margin-bottom: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+            <div>
+                <div class="page-title">Pengeluaran Kas</div>
+                <div class="page-desc" style="margin-bottom: 15px; color: #6b7280; font-size: 13px;">
+                    Pembayaran utang ke pemasok (BKK) dan pengeluaran kas lain-lain seperti beban, pembelian aset, atau prive/dividen.
+                </div>
+            </div>
+            <div>
+                <button type="submit" form="formPengeluaranKas" style="background-color: #d18a99; color: white; border: none; padding: 10px 24px; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer;">Simpan</button>
+            </div>
+        </div>
+
+        <!-- TABS -->
+        <div style="display: flex; border-bottom: 1px solid #e5e7eb; gap: 30px; margin-bottom: 20px;">
+            <a href="/transaksi/pengeluaran-kas?tab=pembayaran" style="padding-bottom: 10px; font-size: 14px; font-weight: 600; text-decoration: none; color: {'#d18a99' if active_tab == 'pembayaran' else '#6b7280'}; border-bottom: 2px solid {'#d18a99' if active_tab == 'pembayaran' else 'transparent'};">Pembayaran Utang</a>
+            <a href="/transaksi/pengeluaran-kas?tab=lain" style="padding-bottom: 10px; font-size: 14px; font-weight: 600; text-decoration: none; color: {'#d18a99' if active_tab == 'lain' else '#6b7280'}; border-bottom: 2px solid {'#d18a99' if active_tab == 'lain' else 'transparent'};">Pengeluaran Lain</a>
+        </div>
+    </div>
+
+    <div class="card-form" style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin-bottom: 30px; position: relative;">
+        <form action="/transaksi/pengeluaran-kas?tab={active_tab}" method="POST" id="formPengeluaranKas">
+            {form_tab_content}
+        </form>
+    </div>
+
+    <!-- LIST & JURNAL DI BAWAH -->
+    <div class="account-card" style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin-bottom: 25px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <div style="font-weight: 600; font-size: 15px; color: #1f2937;">Daftar pembayaran utang / pengeluaran</div>
+            <div style="display: flex; gap: 8px; align-items: center;">
+                <input type="date" value="2026-01-01" style="padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px;">
+                <span style="font-size: 12px; color: #6b7280;">s.d.</span>
+                <input type="date" value="2026-10-31" style="padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px;">
+            </div>
+        </div>
+        {table_pengeluaran_html}
+    </div>
+
+    <div class="account-card" style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px;">
+        <div style="font-weight: 600; font-size: 15px; color: #1f2937; margin-bottom: 15px;">Jurnal Pengeluaran Kas</div>
+        {table_jurnal_html}
+    </div>
+
+    <script>
+        const daftarPembelianEK = {json.dumps(list_pembelian)};
+        let activeTagihanPemasok = [];
+
+        function muatTagihanPemasok(selectEl) {{
+            const namaPemasok = selectEl.value;
+            const wrapperDetail = document.getElementById('wrapperDetailPemasok');
+            const labelSisa = document.getElementById('labelSisaUtangTotal');
+            
+            if(!namaPemasok) {{
+                if(wrapperDetail) wrapperDetail.style.display = 'none';
+                activeTagihanPemasok = [];
+                return;
+            }}
+
+            if(wrapperDetail) wrapperDetail.style.display = 'block';
+
+            activeTagihanPemasok = daftarPembelianEK.filter(tr => tr.pemasok.toLowerCase() === namaPemasok.toLowerCase());
+            
+            let totalSisaUtang = 0;
+            activeTagihanPemasok.forEach(tr => {{
+                let sisaVal = parseFloat(String(tr.sisa || tr.total).replace(/[^\\d]/g, '') || 0);
+                totalSisaUtang += sisaVal;
+            }});
+
+            if(labelSisa) {{
+                labelSisa.innerText = 'Rp ' + new Intl.NumberFormat('id-ID').format(totalSisaUtang);
+            }}
+
+            renderTabelAlokasiPemasok([]);
+        }}
+
+        function renderTabelAlokasiPemasok(selectedFakturs = []) {{
+            const container = document.getElementById('containerTagihanPemasok');
+            if(activeTagihanPemasok.length === 0) {{
+                container.innerHTML = 'Tidak ada tagihan/faktur untuk pemasok ini.';
+                return;
+            }}
+
+            let rowsHtml = '';
+            activeTagihanPemasok.forEach((tr, idx) => {{
+                let isChecked = selectedFakturs.includes(tr.nomor) ? 'checked' : '';
+                let sisaStr = tr.sisa || tr.total;
+                let dibayarVal = selectedFakturs.includes(tr.nomor) ? sisaStr : '0';
+
+                rowsHtml += `
+                <tr onclick="togglePilihFakturPemasok('${{tr.nomor}}')" style="cursor: pointer;">
+                    <td style="padding: 12px 16px;"><input type="checkbox" name="faktur_terpilih[]" value="${{tr.nomor}}" data-sisa="${{sisaStr}}" data-tanggal="${{tr.tanggal}}" ${{isChecked}} onclick="event.stopPropagation(); updateJumlahDibayarOtomatis();" style="cursor: pointer;"></td>
+                    <td style="padding: 12px 16px;"><strong>${{tr.nomor}}</strong> ${{tr.status === 'Saldo Awal' || idx === 0 ? '<span style="background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-size: 11px; color: #4b5563; margin-left: 6px;">Saldo awal</span>' : ''}}</td>
+                    <td style="padding: 12px 16px;">${{tr.tanggal_indo || tr.tanggal}}<br><span style="font-size: 11px; color: #6b7280;">JT ${{tr.jatuh_tempo || '-'}}</span></td>
+                    <td style="padding: 12px 16px; text-align: right; font-weight: 600; color: #1f2937;">Rp ${{sisaStr}}</td>
+                    <td style="padding: 12px 16px; text-align: right; font-weight: 600; color: #047857;" id="bayar_pemasok_disp_${{tr.nomor}}">Rp ${{selectedFakturs.includes(tr.nomor) ? sisaStr : '0'}}</td>
+                    <td style="padding: 12px 16px; text-align: right; color: #6b7280;" id="potongan_pemasok_disp_${{tr.nomor}}">Rp 0</td>
+                    <input type="hidden" name="bayar_alokasi[]" id="bayar_pemasok_val_${{tr.nomor}}" value="${{dibayarVal}}">
+                </tr>
+                `;
+            }});
+
+            container.innerHTML = `
+            <table class="account-table">
+                <thead>
+                    <tr>
+                        <th style="width: 8%;">PILIH</th>
+                        <th style="width: 25%;">NO. FAKTUR</th>
+                        <th style="width: 22%;">TANGGAL</th>
+                        <th style="width: 15%; text-align: right;">SISA</th>
+                        <th style="width: 15%; text-align: right;">DIBAYAR</th>
+                        <th style="width: 15%; text-align: right;">POTONGAN</th>
+                    </tr>
+                </thead>
+                <tbody>${{rowsHtml}}</tbody>
+            </table>
+            `;
+        }}
+
+        function togglePilihFakturPemasok(nomorFaktur) {{
+            const checkboxes = document.querySelectorAll('input[name="faktur_terpilih[]"]');
+            checkboxes.forEach(cb => {{
+                if(cb.value === nomorFaktur) {{
+                    cb.checked = !cb.checked;
+                }}
+            }});
+            updateJumlahDibayarOtomatis();
+        }}
+
+        function lunasiSeluruhUtang() {{
+            const checkboxes = document.querySelectorAll('input[name="faktur_terpilih[]"]');
+            checkboxes.forEach(cb => {{
+                cb.checked = true;
+            }});
+            updateJumlahDibayarOtomatis();
+        }}
+
+        function updateJumlahDibayarOtomatis() {{
+            const checkboxes = document.querySelectorAll('input[name="faktur_terpilih[]"]');
+            const inputDibayar = document.getElementById('inputJumlahDibayar');
+            const inputPotongan = document.getElementById('inputPotonganEK');
+            const tglBayarStr = document.getElementById('inputTanggalEK').value;
+            const tglBayar = new Date(tglBayarStr);
+
+            let totalDibayar = 0;
+            let totalPotongan = 0;
+
+            checkboxes.forEach(cb => {{
+                let nomor = cb.value;
+                let sisaStr = cb.getAttribute('data-sisa');
+                let tglFakturStr = cb.getAttribute('data-tanggal');
+                let sisaNum = parseFloat(sisaStr.replace(/[^\\d]/g, '') || 0);
+                
+                let dispEl = document.getElementById('bayar_pemasok_disp_' + nomor);
+                let hiddenEl = document.getElementById('bayar_pemasok_val_' + nomor);
+                let potDispEl = document.getElementById('potongan_pemasok_disp_' + nomor);
+
+                if(cb.checked) {{
+                    let diskonFaktur = 0;
+                    if(tglFakturStr) {{
+                        let tglFak = new Date(tglFakturStr);
+                        let selisihHari = Math.floor((tglBayar - tglFak) / (1000 * 60 * 60 * 24));
+                        if(selisihHari >= 0 && selisihHari <= 10) {{
+                            diskonFaktur = Math.round(sisaNum * 0.01); 
+                        }}
+                    }}
+
+                    let bayarBersih = sisaNum - diskonFaktur;
+                    totalDibayar += bayarBersih;
+                    totalPotongan += diskonFaktur;
+
+                    dispEl.innerText = 'Rp ' + new Intl.NumberFormat('id-ID').format(bayarBersih);
+                    hiddenEl.value = new Intl.NumberFormat('id-ID').format(bayarBersih);
+                    potDispEl.innerText = diskonFaktur > 0 ? 'Rp ' + new Intl.NumberFormat('id-ID').format(diskonFaktur) : 'Rp 0';
+                }} else {{
+                    dispEl.innerText = 'Rp 0';
+                    hiddenEl.value = '0';
+                    potDispEl.innerText = 'Rp 0';
+                }}
+            }});
+
+            inputDibayar.value = new Intl.NumberFormat('id-ID').format(totalDibayar);
+            inputPotongan.value = new Intl.NumberFormat('id-ID').format(totalPotongan);
+        }}
+
+        function hitungDiskonTerminOtomatis() {{
+            updateJumlahDibayarOtomatis();
+        }}
+
+        function tambahBarisLainEK() {{
+            const tbody = document.getElementById('tbodyPengeluaranLain');
+            const rowCount = tbody.rows.length + 1;
+            const newRow = tbody.insertRow();
+            newRow.innerHTML = `
+                <td style="padding: 10px 16px; text-align: center; color: #6b7280;">${{rowCount}}</td>
+                <td style="padding: 10px 16px;">
+                    <select name="akun_baris[]" style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; background: white;">
+                        {options_semua_akun}
+                    </select>
+                </td>
+                <td style="padding: 10px 16px;">
+                    <input type="text" name="jumlah_baris[]" value="" placeholder="0" oninput="formatRupiahEK(this)" style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; text-align: right;">
+                </td>
+                <td style="padding: 10px 16px;">
+                    <input type="text" name="keterangan_baris[]" value="" placeholder="Keterangan baris" style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px;">
+                </td>
+                <td style="padding: 10px 16px; text-align: center;">
+                    <button type="button" onclick="hapusBarisLainEK(this)" style="background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 16px;">×</button>
+                </td>
+            `;
+        }}
+
+        function hapusBarisLainEK(btn) {{
+            const row = btn.closest('tr');
+            if(row.parentNode.rows.length > 1) {{
+                row.remove();
+                const rows = document.getElementById('tbodyPengeluaranLain').rows;
+                for(let i=0; i<rows.length; i++) {{
+                    rows[i].cells[0].innerText = i + 1;
+                }}
+            }}
+        }}
+
+        function formatRupiahEK(el) {{
+            let angka = el.value.replace(/[^\\d]/g, '');
+            if (angka === "") {{ el.value = "0"; }}
+            else {{ el.value = new Intl.NumberFormat('id-ID').format(angka); }}
+        }}
+    </script>
+    """
+    return render_dashboard_layout('pengeluaran_kas', content)
+
+@app.route('/transaksi/jurnal-umum')
+def jurnal_umum():
+    if 'user_email' not in session:
+        return redirect(url_for('login'))
+    
+    email = session['user_email']
+    user_data = database_user.get(email, {})
+    list_jurnal = user_data.get('jurnal_umum', [])
+
+    if not list_jurnal:
+        table_jurnal_html = """
+        <div style="padding: 40px 20px; text-align: center; color: #6b7280; font-size: 13px;">
+            Belum ada jurnal umum pada periode ini.
+        </div>
+        """
+    else:
+        rows_html = ""
+        for ju in list_jurnal:
+            tgl_raw = ju.get('tanggal', '')
+            try:
+                dt_obj = datetime.strptime(tgl_raw, '%Y-%m-%d')
+                months_id = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agt', 'Sep', 'Okt', 'Nov', 'Des']
+                tgl_formatted = f"{dt_obj.day} {months_id[dt_obj.month]} {dt_obj.year}"
+            except:
+                tgl_formatted = tgl_raw
+
+            details = ju.get('details', [])
+            detail_rows = ""
+            tot_debit = 0
+            tot_kredit = 0
+
+            for d in details:
+                deb = float(d.get('debit', 0) or 0)
+                kre = float(d.get('kredit', 0) or 0)
+                tot_debit += deb
+                tot_kredit += kre
+
+                deb_str = f"{int(deb):,.0f}".replace(',', '.') if deb > 0 else '-'
+                kre_str = f"{int(kre):,.0f}".replace(',', '.') if kre > 0 else '-'
+
+                detail_rows += f"""
+                <tr>
+                    <td style="padding: 8px 16px; color: #374151;">{d.get('akun')}</td>
+                    <td style="padding: 8px 16px; color: #6b7280; font-size: 12px;">{d.get('keterangan', '')}</td>
+                    <td style="padding: 8px 16px; text-align: right; color: #047857;">{deb_str}</td>
+                    <td style="padding: 8px 16px; text-align: right; color: #1d4ed8;">{kre_str}</td>
+                </tr>
+                """
+
+            rows_html += f"""
+            <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 15px; overflow: hidden;">
+                <div style="padding: 12px 20px; background: #f9fafb; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center;">
+                    <div style="display: flex; gap: 15px; align-items: center;">
+                        <span style="font-weight: 600; color: #d18a99;">{ju.get('no_bukti')}</span>
+                        <span style="font-size: 13px; color: #6b7280;">{tgl_formatted}</span>
+                        <span style="background: #e0f2fe; color: #0369a1; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500;">{ju.get('jenis_jurnal', 'Jurnal Umum')}</span>
+                    </div>
+                    <div style="font-size: 13px; color: #4b5563; font-style: italic;">{ju.get('memo', '')}</div>
+                </div>
+                <table class="account-table" style="margin-bottom: 0;">
+                    <thead>
+                        <tr>
+                            <th style="width: 50%; padding: 8px 16px;">Akun</th>
+                            <th style="width: 20%; padding: 8px 16px;">Keterangan Baris</th>
+                            <th style="width: 15%; padding: 8px 16px; text-align: right;">Debit</th>
+                            <th style="width: 15%; padding: 8px 16px; text-align: right;">Kredit</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {detail_rows}
+                    </tbody>
+                </table>
+            </div>
+            """
+
+        table_jurnal_html = f"""
+        <div>{rows_html}</div>
+        """
+
+    content = f"""
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
+        <div>
+            <div class="page-title">Jurnal Umum</div>
+            <div class="page-desc" style="margin-bottom: 0;">Untuk transaksi di luar menu lain: jurnal umum (dividen, retur), jurnal penyesuaian (penyusutan, akrual), dan jurnal penutup.</div>
+        </div>
+        <div>
+            <a href="/transaksi/jurnal-umum/baru" style="background-color: #d18a99; color: white; padding: 10px 18px; border-radius: 6px; font-size: 14px; font-weight: 500; text-decoration: none; display: inline-block;">+ Jurnal umum baru</a>
+        </div>
+    </div>
+
+    <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 15px 20px; margin-bottom: 25px; display: flex; align-items: center; gap: 15px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <input type="date" value="2026-01-01" style="padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+            <span style="font-size: 13px; color: #6b7280;">s.d.</span>
+            <input type="date" value="2026-10-31" style="padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+        </div>
+    </div>
+
+    {table_jurnal_html}
+    """
+    return render_dashboard_layout('jurnal_umum', content)
+
+
+@app.route('/transaksi/jurnal-umum/baru', methods=['GET', 'POST'])
+def tambah_jurnal_umum():
     if 'user_email' not in session:
         return redirect(url_for('login'))
     
     email = session['user_email']
     user_data = database_user.get(email, {})
     list_akun = user_data.get('akun', DEFAULT_AKUN)
-    
-    target_acc = None
-    for acc in list_akun:
-        if acc['kode'] == kode:
-            target_acc = acc
-            break
-            
-    if not target_acc:
-        return redirect(url_for('daftar_akun'))
-        
-    if request.method == 'POST':
-        target_acc['nama'] = request.form.get('nama_akun').strip()
-        target_acc['tipe'] = request.form.get('tipe_akun')
-        return redirect(url_for('daftar_akun'))
+    list_jurnal = user_data.get('jurnal_umum', [])
 
-    modal_content = f"""
-    <div class="modal-backdrop">
-        <div class="modal-box">
-            <div class="modal-header">
-                <div style="font-size: 18px; font-weight: bold; color: #1f2937;">Ubah Akun — {target_acc['kode']}</div>
-                <a href="/setup/akun" style="color: #6b7280; font-size: 20px; text-decoration: none; font-weight: bold;">✕</a>
-            </div>
-            <div class="modal-body">
-                <form action="/setup/akun/ubah/{kode}" method="POST">
-                    <div class="form-group">
-                        <label>Kode Akun</label>
-                        <input type="text" value="{target_acc['kode']}" disabled style="background: #f3f4f6; cursor: not-allowed;">
-                    </div>
-                    <div class="form-group">
-                        <label>Nama Akun <span class="required">*</span></label>
-                        <input type="text" name="nama_akun" value="{target_acc['nama']}" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Tipe Akun (Subtipe)</label>
-                        <input type="text" name="tipe_akun" value="{target_acc['tipe']}" required>
-                    </div>
-                    <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 25px;">
-                        <a href="/setup/akun" class="btn-batal">Batal</a>
-                        <button type="submit" class="btn-simpan">Simpan Perubahan</button>
-                    </div>
-                </form>
-            </div>
+    if request.method == 'POST':
+        tanggal = request.form.get('tanggal')
+        no_bukti = request.form.get('no_bukti', '').strip()
+        if not no_bukti:
+            no_bukti = f"JU-{len(list_jurnal) + 1:03d}"
+        
+        memo = request.form.get('memo', '').strip()
+        jenis_jurnal = request.form.get('jenis_jurnal', 'Jurnal Umum')
+
+        akun_list = request.form.getlist('akun[]')
+        debit_list = request.form.getlist('debit[]')
+        kredit_list = request.form.getlist('kredit[]')
+        keterangan_baris = request.form.getlist('keterangan_baris[]')
+
+        details = []
+        total_debit_trx = 0
+        total_kredit_trx = 0
+
+        for idx, ak in enumerate(akun_list):
+            if ak:
+                deb_val = float(debit_list[idx].replace('.', '') or 0) if idx < len(debit_list) else 0
+                kre_val = float(kredit_list[idx].replace('.', '') or 0) if idx < len(kredit_list) else 0
+                
+                if deb_val > 0 or kre_val > 0:
+                    total_debit_trx += deb_val
+                    total_kredit_trx += kre_val
+                    
+                    nama_akun_bersih = ak.split(' — ')[1] if ' — ' in ak else (ak.split(' - ')[1] if ' - ' in ak else ak)
+                    
+                    # Update saldo akun secara otomatis di master akun
+                    for acc in list_akun:
+                        acc_str = f"{acc.get('kode')} — {acc.get('nama')}"
+                        if acc_str == ak or acc.get('kode') in ak:
+                            try:
+                                saldo_lama = float(str(acc.get('saldo', '0')).replace('.', '') or 0)
+                                kategori = acc.get('kategori', '')
+                                
+                                # Tentukan penambahan saldo berdasarkan posisi normal akun
+                                if kategori in ['1 — Aset', '5 — Beban']:
+                                    perubahan = deb_val - kre_val
+                                else:
+                                    perubahan = kre_val - deb_val
+                                    
+                                saldo_baru = saldo_lama + perubahan
+                                acc['saldo'] = f"{int(saldo_baru):,.0f}".replace(',', '.')
+                            except:
+                                pass
+
+                    details.append({
+                        'akun': nama_akun_bersih,
+                        'debit': deb_val,
+                        'kredit': kre_val,
+                        'keterangan': keterangan_baris[idx] if idx < len(keterangan_baris) else ''
+                    })
+
+        jurnal_obj = {
+            'no_bukti': no_bukti,
+            'tanggal': tanggal,
+            'memo': memo,
+            'jenis_jurnal': jenis_jurnal,
+            'total_debit': total_debit_trx,
+            'total_kredit': total_kredit_trx,
+            'details': details
+        }
+
+        user_data.setdefault('jurnal_umum', []).append(jurnal_obj)
+        return redirect(url_for('jurnal_umum'))
+
+    today_date = datetime.now().strftime('%Y-%m-%d')
+
+    options_semua_akun = '<option value="">-- Pilih Akun --</option>'
+    for acc in list_akun:
+        options_semua_akun += f'<option value="{acc.get("kode")} — {acc.get("nama")}">{acc.get("kode")} — {acc.get("nama")}</option>'
+
+    content = f"""
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
+        <div>
+            <div class="page-title">Jurnal Umum Baru</div>
+            <div class="page-desc" style="margin-bottom: 0;">Satu baris hanya boleh berisi debit ATAU kredit. Bisa tempel (Ctrl+V) dari Excel: Kode akun | Debit | Kredit | Keterangan.</div>
+        </div>
+        <div>
+            <a href="/transaksi/jurnal-umum" class="btn-action" style="padding: 8px 16px; font-weight: 500;">← Daftar</a>
         </div>
     </div>
+
+    <div class="card-form" style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin-bottom: 25px;">
+        <form action="/transaksi/jurnal-umum/baru" method="POST" id="formJurnalUmum">
+            <div style="display: grid; grid-template-columns: 1fr 1.5fr 2fr 1fr; gap: 20px; margin-bottom: 20px;" class="form-group">
+                <div>
+                    <label style="font-size: 13px; color: #374151; font-weight: 500;">Tanggal <span style="color: #ef4444;">*</span></label>
+                    <input type="date" name="tanggal" value="{today_date}" style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;" required>
+                </div>
+                <div>
+                    <label style="font-size: 13px; color: #374151; font-weight: 500;">No. bukti</label>
+                    <input type="text" name="no_bukti" placeholder="JU-otomatis" style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+                    <span style="font-size: 11px; color: #6b7280; margin-top: 2px; display: block;">Kosong = otomatis (JU-xxxx)</span>
+                </div>
+                <div>
+                    <label style="font-size: 13px; color: #374151; font-weight: 500;">Memo / keterangan</label>
+                    <input type="text" name="memo" placeholder="mis. Penyusutan peralatan Januari" style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+                </div>
+                <div>
+                    <label style="font-size: 13px; color: #374151; font-weight: 500;">Jenis jurnal</label>
+                    <select name="jenis_jurnal" style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; background: white;">
+                        <option value="Jurnal Umum">Jurnal Umum</option>
+                        <option value="Penyesuaian">Penyesuaian</option>
+                        <option value="Penutup">Penutup</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- TABEL BARIS JURNAL UMUM -->
+            <div style="border: 1px solid #e5e7eb; border-radius: 8px; background: white; overflow: hidden; margin-top: 20px;">
+                <table class="account-table" style="margin-bottom: 0;">
+                    <thead>
+                        <tr>
+                            <th style="width: 5%;">#</th>
+                            <th style="width: 40%;">Akun (kode / nama)</th>
+                            <th style="width: 18%; text-align: right;">Debit</th>
+                            <th style="width: 18%; text-align: right;">Kredit</th>
+                            <th style="width: 13%;">Keterangan</th>
+                            <th style="width: 6%; text-align: center;"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbodyJurnalUmum">
+                        <!-- 4 Baris Awal Default -->
+                        <tr>
+                            <td style="padding: 10px 16px; text-align: center; color: #6b7280;">1</td>
+                            <td style="padding: 10px 16px;"><select name="akun[]" style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; background: white;">{options_semua_akun}</select></td>
+                            <td style="padding: 10px 16px;"><input type="text" name="debit[]" value="" placeholder="0" oninput="formatRupiahJU(this)" style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; text-align: right;"></td>
+                            <td style="padding: 10px 16px;"><input type="text" name="kredit[]" value="" placeholder="0" oninput="formatRupiahJU(this)" style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; text-align: right;"></td>
+                            <td style="padding: 10px 16px;"><input type="text" name="keterangan_baris[]" value="" placeholder="Keterangan" style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px;"></td>
+                            <td style="padding: 10px 16px; text-align: center;"><button type="button" onclick="hapusBarisJU(this)" style="background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 16px;">×</button></td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 10px 16px; text-align: center; color: #6b7280;">2</td>
+                            <td style="padding: 10px 16px;"><select name="akun[]" style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; background: white;">{options_semua_akun}</select></td>
+                            <td style="padding: 10px 16px;"><input type="text" name="debit[]" value="" placeholder="0" oninput="formatRupiahJU(this)" style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; text-align: right;"></td>
+                            <td style="padding: 10px 16px;"><input type="text" name="kredit[]" value="" placeholder="0" oninput="formatRupiahJU(this)" style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; text-align: right;"></td>
+                            <td style="padding: 10px 16px;"><input type="text" name="keterangan_baris[]" value="" placeholder="Keterangan" style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px;"></td>
+                            <td style="padding: 10px 16px; text-align: center;"><button type="button" onclick="hapusBarisJU(this)" style="background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 16px;">×</button></td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 10px 16px; text-align: center; color: #6b7280;">3</td>
+                            <td style="padding: 10px 16px;"><select name="akun[]" style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; background: white;">{options_semua_akun}</select></td>
+                            <td style="padding: 10px 16px;"><input type="text" name="debit[]" value="" placeholder="0" oninput="formatRupiahJU(this)" style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; text-align: right;"></td>
+                            <td style="padding: 10px 16px;"><input type="text" name="kredit[]" value="" placeholder="0" oninput="formatRupiahJU(this)" style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; text-align: right;"></td>
+                            <td style="padding: 10px 16px;"><input type="text" name="keterangan_baris[]" value="" placeholder="Keterangan" style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px;"></td>
+                            <td style="padding: 10px 16px; text-align: center;"><button type="button" onclick="hapusBarisJU(this)" style="background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 16px;">×</button></td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 10px 16px; text-align: center; color: #6b7280;">4</td>
+                            <td style="padding: 10px 16px;"><select name="akun[]" style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; background: white;">{options_semua_akun}</select></td>
+                            <td style="padding: 10px 16px;"><input type="text" name="debit[]" value="" placeholder="0" oninput="formatRupiahJU(this)" style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; text-align: right;"></td>
+                            <td style="padding: 10px 16px;"><input type="text" name="kredit[]" value="" placeholder="0" oninput="formatRupiahJU(this)" style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; text-align: right;"></td>
+                            <td style="padding: 10px 16px;"><input type="text" name="keterangan_baris[]" value="" placeholder="Keterangan" style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px;"></td>
+                            <td style="padding: 10px 16px; text-align: center;"><button type="button" onclick="hapusBarisJU(this)" style="background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 16px;">×</button></td>
+                        </tr>
+                    </tbody>
+                    <tfoot>
+                        <tr style="background-color: #f9fafb; font-weight: 600;">
+                            <td colspan="2" style="padding: 12px 16px; text-align: center;">
+                                <span id="statusBalance" style="background: #fee2e2; color: #991b1b; padding: 3px 10px; border-radius: 4px; font-size: 12px;">✕ Selisih</span>
+                                <span style="margin-left: 10px;">Total</span>
+                            </td>
+                            <td style="padding: 12px 16px; text-align: right;" id="totalDebitJU">-</td>
+                            <td style="padding: 12px 16px; text-align: right;" id="totalKreditJU">-</td>
+                            <td colspan="2"></td>
+                        </tr>
+                    </tfoot>
+                </table>
+                <div style="padding: 10px 16px; background: #f9fafb; border-top: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center;">
+                    <button type="button" onclick="tambahBarisJU()" style="background: none; border: none; color: #d18a99; font-weight: 600; font-size: 13px; cursor: pointer;">+ Tambah baris</button>
+                    <span style="font-size: 11px; color: #6b7280;">Enter/↓ bawah · ↑ atas · Tab kanan · Esc batal</span>
+                </div>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; align-items: center; border-top: 1px solid #e5e7eb; padding-top: 20px; margin-top: 30px;">
+                <button type="submit" class="btn-simpan" style="background-color: #d18a99; padding: 10px 28px;">Simpan jurnal umum</button>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        function tambahBarisJU() {{
+            const tbody = document.getElementById('tbodyJurnalUmum');
+            const rowCount = tbody.rows.length + 1;
+            const newRow = tbody.insertRow();
+            newRow.innerHTML = `
+                <td style="padding: 10px 16px; text-align: center; color: #6b7280;">${{rowCount}}</td>
+                <td style="padding: 10px 16px;"><select name="akun[]" style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; background: white;">{options_semua_akun}</select></td>
+                <td style="padding: 10px 16px;"><input type="text" name="debit[]" value="" placeholder="0" oninput="formatRupiahJU(this)" style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; text-align: right;"></td>
+                <td style="padding: 10px 16px;"><input type="text" name="kredit[]" value="" placeholder="0" oninput="formatRupiahJU(this)" style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; text-align: right;"></td>
+                <td style="padding: 10px 16px;"><input type="text" name="keterangan_baris[]" value="" placeholder="Keterangan" style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px;"></td>
+                <td style="padding: 10px 16px; text-align: center;"><button type="button" onclick="hapusBarisJU(this)" style="background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 16px;">×</button></td>
+            `;
+        }}
+
+        function hapusBarisJU(btn) {{
+            const row = btn.closest('tr');
+            if(row.parentNode.rows.length > 1) {{
+                row.remove();
+                const rows = document.getElementById('tbodyJurnalUmum').rows;
+                for(let i=0; i<rows.length; i++) {{
+                    rows[i].cells[0].innerText = i + 1;
+                }}
+                hitungTotalJU();
+            }}
+        }}
+
+        function formatRupiahJU(el) {{
+            let angka = el.value.replace(/[^\\d]/g, '');
+            if (angka === "") {{ el.value = ""; }}
+            else {{ el.value = new Intl.NumberFormat('id-ID').format(angka); }}
+            hitungTotalJU();
+        }}
+
+        function hitungTotalJU() {{
+            let totalDebit = 0;
+            let totalKredit = 0;
+
+            document.querySelectorAll('#tbodyJurnalUmum tr').forEach(row => {{
+                const inpDeb = row.querySelector('input[name="debit[]"]');
+                const inpKre = row.querySelector('input[name="kredit[]"]');
+                
+                if(inpDeb && inpDeb.value) {{
+                    totalDebit += parseFloat(inpDeb.value.replace(/\\./g, '')) || 0;
+                }}
+                if(inpKre && inpKre.value) {{
+                    totalKredit += parseFloat(inpKre.value.replace(/\\./g, '')) || 0;
+                }}
+            }});
+
+            document.getElementById('totalDebitJU').innerText = totalDebit > 0 ? 'Rp ' + new Intl.NumberFormat('id-ID').format(totalDebit) : '-';
+            document.getElementById('totalKreditJU').innerText = totalKredit > 0 ? 'Rp ' + new Intl.NumberFormat('id-ID').format(totalKredit) : '-';
+
+            const statusBadge = document.getElementById('statusBalance');
+            if(totalDebit > 0 && totalDebit === totalKredit) {{
+                statusBadge.style.backgroundColor = '#d1fae5';
+                statusBadge.style.color = '#065f46';
+                statusBadge.innerText = '✓ Seimbang';
+            }} else {{
+                statusBadge.style.backgroundColor = '#fee2e2';
+                statusBadge.style.color = '#991b1b';
+                statusBadge.innerText = '✕ Selisih';
+            }}
+        }}
+    </script>
     """
-    session['modal_akun'] = modal_content
-    return redirect(url_for('daftar_akun'))
+    return render_dashboard_layout('jurnal_umum', content)
 
 @app.route('/logout')
 def logout():
